@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Harbor — Studio ops in one list</title>
+    <link rel="stylesheet" href="./demo.css" />
+  </head>
+  <body>
+    <header class="site-header wrap">
+      <a class="logo" href="./index.html">Harbor</a>
+      <nav class="nav" aria-label="Primary">
+        <a href="./index.html" aria-current="page">Product</a>
+        <a class="hide-sm" href="./pricing.html">Pricing</a>
+        <a class="hide-sm" href="#notes">Notes</a>
+        <a href="./pricing.html" class="btn btn-ghost">Sign in</a>
+        <a href="./pricing.html" class="btn btn-small">Get started</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero wrap" aria-label="Introduction">
+        <div>
+          <h1>Run the studio from one calm list.</h1>
+          <p>
+            Harbor keeps jobs, invoices, and follow-ups in a single place so a
+            small team can stop hunting through tabs.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-hero" href="./pricing.html">Start building</a>
+            <a class="btn btn-ghost" href="#notes">See how it works</a>
+          </div>
+        </div>
+        <aside class="hero-note">
+          <h2>Today</h2>
+          <p>3 invoices waiting. Site visit at 2:15. Maya left a note on the Mill Street job.</p>
+        </aside>
+      </section>
+
+      <section class="section wrap" id="notes" data-section="Features">
+        <h2>What stays in Harbor</h2>
+        <p class="lede">A short set of objects, used every day. Nothing extra to configure.</p>
+        <div class="cards">
+          <article class="card">
+            <h3>Jobs</h3>
+            <p>Every site, client, and due date on one board. Drag a card when the work moves.</p>
+          </article>
+          <article class="card">
+            <h3>Invoices</h3>
+            <p>Send from the job. Harbor tracks who opened it and who still owes you.</p>
+          </article>
+          <article class="card">
+            <h3>Notes</h3>
+            <p>Voice memos and photos land on the job, not in a private camera roll.</p>
+          </article>
+        </div>
+        <figure class="quote">
+          <p>“We stopped running the company out of a group text.”</p>
+          <cite>Priya Shah, Northline Build</cite>
+        </figure>
+      </section>
+
+      <section class="section wrap" aria-label="Newsletter">
+        <h2>Monthly field notes</h2>
+        <p class="lede">One email. No product announcements dressed up as essays.</p>
+        <form class="newsletter" action="./pricing.html" method="get">
+          <label class="sr-only" for="email">Email</label>
+          <input id="email" name="email" type="email" placeholder="you@studio.com" />
+          <button type="submit">Join the list</button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer wrap">
+      <span>Harbor, a demo site for Cite</span>
+      <a href="./pricing.html">Pricing</a>
+    </footer>
+
+    <script src="../cite.js" data-project="demo"></script>
+  </body>
+</html>
