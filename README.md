@@ -10,20 +10,30 @@ No accounts. No backend. No build step.
 
 ```html
 <script
-  src="https://yourtool.com/cite.js"
+  src="https://cite.brijr.dev/cite.js"
   data-project="abc123"
 ></script>
 ```
 
 `data-project` only namespaces localStorage. It is optional.
 
+Live demo: [cite.brijr.dev/demo/](https://cite.brijr.dev/demo/)
+
 ## Local demo
 
 ```bash
-python3 -m http.server 4173
+npx wrangler dev
 ```
 
-Open [http://localhost:4173/demo/](http://localhost:4173/demo/).
+Or `python3 -m http.server 4173`. Open [http://localhost:4173/demo/](http://localhost:4173/demo/).
+
+## Deploy
+
+```bash
+npm run deploy
+```
+
+Serves `cite.js` at [cite.brijr.dev/cite.js](https://cite.brijr.dev/cite.js).
 
 ## Use
 

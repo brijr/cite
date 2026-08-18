@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cite",
+  "account_id": "4976e8a5df6887f41b287a83e6b5c18f",
+  "compatibility_date": "2026-08-18",
+  "workers_dev": true,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "cite.brijr.dev",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "."
+  },
+  "observability": {
+    "enabled": true
+  }
+}

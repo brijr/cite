@@ -1,7 +1,7 @@
 /**
  * cite.js — click any element, describe the change, copy a bundle for a coding agent.
  *
- *   <script src="/cite.js" data-project="abc123"></script>
+ *   <script src="https://cite.brijr.dev/cite.js" data-project="abc123"></script>
  *
  * Local only. Annotations persist in localStorage. The script makes no network calls.
  */
