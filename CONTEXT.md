@@ -13,7 +13,7 @@ The captured identity and context of a DOM element: selector, text, HTML, comput
 _Avoid_: Element snapshot, payload, node
 
 **Bundle**:
-The formatted text produced from one or more Annotations, written for a coding agent to apply.
+The formatted text produced from one or more Annotations, written for a coding agent to apply. Copying a Bundle removes those Annotations from the page.
 _Avoid_: Prompt dump, export, snippet, report
 
 **Inspect**:

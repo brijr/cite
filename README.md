@@ -17,15 +17,15 @@ No accounts. No backend. No build step.
 
 `data-project` only namespaces localStorage. It is optional.
 
-Site: [cite.brijr.dev](https://cite.brijr.dev). Host demo: [cite.brijr.dev/demo/](https://cite.brijr.dev/demo/).
+Site: [cite.brijr.dev](https://cite.brijr.dev). Cite is loaded on that page.
 
-## Local demo
+## Local
 
 ```bash
 npx wrangler dev
 ```
 
-Or `python3 -m http.server 4173`. Open [http://localhost:4173/demo/](http://localhost:4173/demo/).
+Or `python3 -m http.server 4173`. Open [http://localhost:4173/](http://localhost:4173/).
 
 ## Deploy
 
@@ -37,12 +37,12 @@ Serves `cite.js` at [cite.brijr.dev/cite.js](https://cite.brijr.dev/cite.js).
 
 ## Use
 
-1. Press `Alt+C` (or click **Inspect**).
+1. Press `Cmd+Shift+F` (or click **Inspect**).
 2. `Tab` / arrows to an element. `Enter` cites it. Click still works.
 3. Write the change. `⌘Enter` / `Ctrl+Enter` saves. `Esc` backs up.
-4. `Alt+Shift+C` copies the bundle for the agent.
+4. `C` copies the bundle and removes those annotations from the list.
 
-`?` opens the shortcut list while Cite is active. `Alt+A` still toggles inspect.
+`?` opens the shortcut list while Cite is active.
 
 Annotations persist per page in `localStorage`. Marks stay on the page so you can stack several requests, then copy them as one bundle.
 
@@ -54,9 +54,9 @@ The copied text looks like this:
 The following are visual change requests captured from a web page.
 Apply each request to the matching element.
 
-Page: /demo/pricing.html
-Title: Pricing — Harbor
-URL: http://localhost:4173/demo/pricing.html
+Page: /
+Title: Cite — click anything, tell the agent what to change
+URL: https://cite.brijr.dev/
 
 ## Annotation 1
 

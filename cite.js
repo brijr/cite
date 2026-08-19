@@ -14,8 +14,8 @@
   const ROOT_ID = "cite-root";
   const storageKey = `cite:${project}:${location.origin}${location.pathname}`;
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-  const KEY_INSPECT = IS_MAC ? "⌥C" : "Alt+C";
-  const KEY_COPY = IS_MAC ? "⌥⇧C" : "Alt+Shift+C";
+  const KEY_INSPECT = IS_MAC ? "⌘⇧ F" : "Ctrl+Shift+F";
+  const KEY_COPY = "C";
   const KEY_SAVE = IS_MAC ? "⌘↵" : "Ctrl+Enter";
   const TARGET_SEL = [
     "a[href]",
@@ -481,11 +481,51 @@
       box-shadow: 0 0 0 2px oklch(0.18 0.012 260 / 0.7);
     }
     .mark:hover, .mark.is-active { background: oklch(0.88 0.13 85); }
-    .toolbar {
+    .dock {
       position: fixed;
-      left: 50%;
+      right: 16px;
       bottom: 16px;
       z-index: 7;
+      pointer-events: auto;
+    }
+    .fab {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      background: var(--bg);
+      color: var(--text);
+      box-shadow:
+        0 0 0 1px oklch(1 0 0 / 0.08),
+        0 10px 30px oklch(0 0 0 / 0.28);
+      transition: background-color 140ms ease, transform 140ms var(--ease);
+    }
+    .fab svg {
+      display: block;
+      width: 18px;
+      height: 18px;
+    }
+    .fab:hover { background: var(--bg-hover); }
+    .fab:active { transform: scale(0.97); }
+    .fab-count {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-text);
+      font-size: 10px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      line-height: 16px;
+    }
+    .toolbar {
       display: flex;
       align-items: center;
       gap: 2px;
@@ -495,9 +535,9 @@
       box-shadow:
         0 0 0 1px oklch(1 0 0 / 0.08),
         0 10px 30px oklch(0 0 0 / 0.28);
-      pointer-events: auto;
-      transform: translateX(-50%);
     }
+    .dock:not(.is-open) .toolbar { display: none; }
+    .dock.is-open .fab { display: none; }
     .toolbar button {
       height: 32px;
       padding: 0 12px;
@@ -511,13 +551,21 @@
     kbd {
       font: inherit;
       color: var(--subtle);
-      margin-left: 6px;
+      margin-left: 8px;
+      letter-spacing: 0.06em;
     }
     .toolbar button:hover { background: var(--bg-hover); color: var(--text); }
     .toolbar button:active { transform: scale(0.97); }
     .toolbar button.is-on {
       background: var(--accent);
       color: var(--accent-text);
+    }
+    .toolbar button.is-on kbd {
+      color: var(--accent-text);
+      background: oklch(0.22 0.04 75 / 0.1);
+      padding: 3px 6px;
+      border-radius: 5px;
+      letter-spacing: 0.08em;
     }
     .toolbar button.is-on:hover { background: oklch(0.86 0.13 80); }
     .toolbar .primary {
@@ -537,10 +585,9 @@
     }
     .hint {
       position: fixed;
-      left: 50%;
-      bottom: 60px;
+      right: 16px;
+      bottom: 64px;
       z-index: 7;
-      transform: translateX(-50%);
       padding: 6px 10px;
       border-radius: 8px;
       background: var(--bg);
@@ -553,10 +600,9 @@
     }
     .help {
       position: fixed;
-      left: 50%;
+      right: 16px;
       bottom: 64px;
       z-index: 8;
-      transform: translateX(-50%);
       width: min(340px, calc(100vw - 24px));
       padding: 12px 14px;
       border-radius: var(--radius);
@@ -767,10 +813,9 @@
     .panel-foot .btn-primary { width: 100%; }
     .toast {
       position: fixed;
-      left: 50%;
-      bottom: 60px;
+      right: 16px;
+      bottom: 64px;
       z-index: 8;
-      transform: translateX(-50%);
       padding: 7px 12px;
       border-radius: 8px;
       background: var(--bg);
@@ -792,10 +837,10 @@
         height: min(58vh, 480px);
       }
       .hint { display: none; }
-      .toolbar .wide-label, .toolbar kbd, .composer-keys { display: none; }
+      .toolbar kbd, .composer-keys { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .toolbar button, .btn, .icon-btn { transition: none; }
+      .toolbar button, .btn, .icon-btn, .fab { transition: none; }
     }
   `;
 
@@ -838,12 +883,24 @@
         <div class="label" hidden></div>
         <div class="marks"></div>
         <div class="hint" hidden></div>
-        <div class="toolbar" role="toolbar" aria-label="Cite">
-          <button type="button" data-act="inspect" aria-pressed="false" aria-keyshortcuts="Alt+C">Inspect <kbd></kbd></button>
-          <span class="sep"></span>
-          <button type="button" class="count" data-act="panel" aria-label="Open annotations">0</button>
-          <span class="sep"></span>
-          <button type="button" class="primary" data-act="copy" aria-keyshortcuts="Alt+Shift+C">Copy <span class="wide-label">for agent</span> <kbd></kbd></button>
+        <div class="dock">
+          <button type="button" class="fab" data-act="open" aria-label="Open Cite" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 3.5h6v2.25H9z"/>
+              <path d="M8.25 5.75h7.5L17 13.25H7L8.25 5.75z"/>
+              <path d="M7 13.25h10"/>
+              <path d="M7 13.25 12 20.5 17 13.25"/>
+              <path d="M12 5.75v14.75"/>
+            </svg>
+            <span class="fab-count" hidden>0</span>
+          </button>
+          <div class="toolbar" role="toolbar" aria-label="Cite">
+            <button type="button" data-act="inspect" aria-pressed="false" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">Feedback <kbd></kbd></button>
+            <span class="sep"></span>
+            <button type="button" class="count" data-act="panel" aria-label="Open annotations">0</button>
+            <span class="sep"></span>
+            <button type="button" class="primary" data-act="copy" aria-keyshortcuts="c">Copy Feedback <kbd></kbd></button>
+          </div>
         </div>
         <aside class="panel" hidden>
           <header class="panel-head">
@@ -866,7 +923,7 @@
           <div class="list" data-el="list"></div>
           <div class="empty" data-el="empty" hidden></div>
           <footer class="panel-foot">
-            <button type="button" class="btn btn-primary" data-act="copy">Copy for agent</button>
+            <button type="button" class="btn btn-primary" data-act="copy">Copy Feedback</button>
           </footer>
         </aside>
         <div class="help" hidden></div>
@@ -878,6 +935,9 @@
     els.label = shadow.querySelector(".label");
     els.marks = shadow.querySelector(".marks");
     els.hint = shadow.querySelector(".hint");
+    els.dock = shadow.querySelector(".dock");
+    els.fab = shadow.querySelector(".fab");
+    els.fabCount = shadow.querySelector(".fab-count");
     els.toolbar = shadow.querySelector(".toolbar");
     els.inspect = shadow.querySelector('[data-act="inspect"]');
     els.count = shadow.querySelector(".count");
@@ -922,9 +982,9 @@
     if (toolbar) {
       toolbar.innerHTML = copied
         ? "Copied"
-        : `Copy <span class="wide-label">for agent</span> <kbd>${KEY_COPY}</kbd>`;
+        : `Copy Feedback <kbd>${KEY_COPY}</kbd>`;
     }
-    if (panel) panel.textContent = copied ? "Copied" : "Copy for agent";
+    if (panel) panel.textContent = copied ? "Copied" : "Copy Feedback";
   }
 
   function showToast(message) {
@@ -1027,7 +1087,7 @@
     if (!items.length) {
       els.list.innerHTML = "";
       els.empty.hidden = Boolean(state.draft);
-      els.empty.textContent = "Click Inspect, then click anything on the page.";
+      els.empty.textContent = `Press ${KEY_INSPECT}, then cite anything on the page.`;
       return;
     }
     els.empty.hidden = true;
@@ -1073,9 +1133,17 @@
       els.hint.textContent = `Tab next · Enter cite · ${KEY_INSPECT} inspect · ? keys`;
       return;
     }
-    const showIntro = state.hint && !state.annotations.length && !state.panel;
-    els.hint.hidden = !showIntro;
-    els.hint.textContent = `${KEY_INSPECT} inspect · Tab to an element · Enter to cite`;
+    els.hint.hidden = true;
+  }
+
+  function paintDock() {
+    const open = state.inspect || state.panel || Boolean(state.draft) || state.help;
+    els.dock.classList.toggle("is-open", open);
+    const n = state.annotations.length;
+    if (els.fabCount) {
+      els.fabCount.hidden = !n || open;
+      els.fabCount.textContent = String(n);
+    }
   }
 
   function paintHelp() {
@@ -1090,7 +1158,7 @@
         <dt>↑ ↓ ← →</dt><dd>Move</dd>
         <dt>Enter</dt><dd>Cite this element</dd>
         <dt>${escapeHtml(KEY_SAVE)}</dt><dd>Save request</dd>
-        <dt>${escapeHtml(KEY_COPY)}</dt><dd>Copy for agent</dd>
+        <dt>${escapeHtml(KEY_COPY)}</dt><dd>Copy and resolve</dd>
         <dt>${escapeHtml(IS_MAC ? "⌥P" : "Alt+P")}</dt><dd>Annotations</dd>
         <dt>J K</dt><dd>Next / previous annotation</dd>
         <dt>?</dt><dd>This list</dd>
@@ -1105,6 +1173,7 @@
     paintComposer();
     paintHint();
     paintHelp();
+    paintDock();
     const locked = state.draft
       ? (() => {
           try {
@@ -1153,10 +1222,28 @@
     showToast("Copied — paste into Claude, Cursor, or Codex");
   }
 
+  function copyAndResolve(annotations) {
+    if (!annotations.length) {
+      showToast("Nothing to copy yet");
+      return;
+    }
+    const bundle = formatBundle(annotations);
+    const ids = new Set(annotations.map((item) => item.id));
+    state.annotations = state.annotations.filter((item) => !ids.has(item.id));
+    if (ids.has(state.activeId)) state.activeId = null;
+    persistAnnotations(state.annotations);
+    sync();
+    copyText(bundle);
+  }
+
   function onUiClick(event) {
     const button = event.target.closest("button");
     if (!button) return;
     const act = button.dataset.act;
+    if (act === "open") {
+      toggleInspect();
+      return;
+    }
     if (act === "inspect") {
       toggleInspect();
       return;
@@ -1180,12 +1267,12 @@
       return;
     }
     if (act === "copy") {
-      copyText(formatBundle(state.annotations));
+      copyAndResolve(state.annotations);
       return;
     }
     if (act === "copy-one") {
       const annotation = state.annotations.find((item) => item.id === button.dataset.id);
-      if (annotation) copyText(formatBundle([annotation]));
+      if (annotation) copyAndResolve([annotation]);
       return;
     }
     if (act === "delete") {
@@ -1215,6 +1302,7 @@
     state.draft = null;
     state.activeId = state.annotations[state.annotations.length - 1].id;
     els.textarea.value = "";
+    els.textarea.blur();
     setInspect(true);
     showToast("Saved");
     sync();
@@ -1421,6 +1509,14 @@
     return /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
   }
 
+  function physicalLetter(event) {
+    const code = event.code || "";
+    if (code.length === 4 && code.startsWith("Key")) return code[3].toLowerCase();
+    const key = event.key || "";
+    if (key.length === 1) return key.toLowerCase();
+    return "";
+  }
+
   function onKey(event) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -1448,6 +1544,22 @@
       return;
     }
 
+    const key = event.key;
+    const letter = physicalLetter(event);
+
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.shiftKey &&
+      !event.altKey &&
+      letter === "f"
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      toggleInspect();
+      return;
+    }
+
     if (inComposer(event)) {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
@@ -1456,27 +1568,12 @@
       return;
     }
 
-    const key = event.key;
-    const letter = key.length === 1 ? key.toLowerCase() : key;
-
-    if (event.altKey && !event.metaKey && !event.ctrlKey) {
-      if (letter === "c" && event.shiftKey) {
-        event.preventDefault();
-        copyText(formatBundle(state.annotations));
-        return;
-      }
-      if (letter === "c" || letter === "a") {
-        event.preventDefault();
-        toggleInspect();
-        return;
-      }
-      if (letter === "p") {
-        event.preventDefault();
-        setPanel(!state.panel);
-        if (state.panel) setInspect(false);
-        sync();
-        return;
-      }
+    if (event.altKey && !event.metaKey && !event.ctrlKey && letter === "p") {
+      event.preventDefault();
+      setPanel(!state.panel);
+      if (state.panel) setInspect(false);
+      sync();
+      return;
     }
 
     if (hostTyping(event)) return;
@@ -1525,7 +1622,7 @@
       }
       if (letter === "c") {
         event.preventDefault();
-        copyText(formatBundle(state.annotations));
+        copyAndResolve(state.annotations);
         return;
       }
     }
@@ -1543,8 +1640,7 @@
       }
       if (letter === "c") {
         event.preventDefault();
-        const selected = state.annotations.find((item) => item.id === state.activeId);
-        copyText(formatBundle(selected ? [selected] : state.annotations));
+        copyAndResolve(state.annotations);
         return;
       }
       if (letter === "d" || key === "Backspace") {
