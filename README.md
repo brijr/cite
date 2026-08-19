@@ -17,7 +17,7 @@ No accounts. No backend. No build step.
 
 `data-project` only namespaces localStorage. It is optional.
 
-Live demo: [cite.brijr.dev/demo/](https://cite.brijr.dev/demo/)
+Site: [cite.brijr.dev](https://cite.brijr.dev). Host demo: [cite.brijr.dev/demo/](https://cite.brijr.dev/demo/).
 
 ## Local demo
 
@@ -37,10 +37,12 @@ Serves `cite.js` at [cite.brijr.dev/cite.js](https://cite.brijr.dev/cite.js).
 
 ## Use
 
-1. Click **Inspect** (or press `Alt+A`).
-2. Click an element. Links and buttons will not fire.
-3. Write the change. `⌘Enter` / `Ctrl+Enter` saves. `Esc` cancels.
-4. Click **Copy for agent** and paste the bundle into an agent.
+1. Press `Alt+C` (or click **Inspect**).
+2. `Tab` / arrows to an element. `Enter` cites it. Click still works.
+3. Write the change. `⌘Enter` / `Ctrl+Enter` saves. `Esc` backs up.
+4. `Alt+Shift+C` copies the bundle for the agent.
+
+`?` opens the shortcut list while Cite is active. `Alt+A` still toggles inspect.
 
 Annotations persist per page in `localStorage`. Marks stay on the page so you can stack several requests, then copy them as one bundle.
 

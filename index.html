@@ -1,5 +1,130 @@
 <!doctype html>
-<meta charset="utf-8" />
-<meta http-equiv="refresh" content="0; url=./demo/" />
-<title>Cite</title>
-<p><a href="./demo/">Open the demo</a></p>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cite — click anything, tell the agent what to change</title>
+    <meta
+      name="description"
+      content="A single script. Click an element, describe the change, copy a bundle for a coding agent."
+    />
+    <link rel="stylesheet" href="./home.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="masthead">
+        <div class="brand">
+          <a href="./">Cite</a>
+          <small>brijr.dev</small>
+          <small>2026</small>
+        </div>
+        <nav aria-label="Primary">
+          <span>[ <a href="./demo/">Demo</a> ]</span>
+          <span>[ <a href="https://github.com/brijr/cite">GitHub</a> ]</span>
+          <span>[ <a href="./cite.js">cite.js</a> ]</span>
+        </nav>
+      </header>
+
+      <main>
+        <p class="lede">~*~ click anything. tell the agent what to change. ~*~</p>
+
+        <h1>A script you drop on any website</h1>
+        <p>
+          Cite injects an isolated overlay. Click an element, write the change,
+          and copy a bundle — selector, HTML, computed CSS, nearby DOM, and the
+          request — ready to paste into Claude, Cursor, or Codex.
+        </p>
+        <p>No accounts. No backend. No build step. Works on anything that renders a DOM.</p>
+
+        <pre><code>&lt;script src="https://cite.brijr.dev/cite.js"&gt;&lt;/script&gt;</code></pre>
+
+        <h2>Use</h2>
+        <ol>
+          <li>Press Alt+C to inspect, or click Inspect</li>
+          <li>Tab or arrows to an element. Enter cites it</li>
+          <li>Write the change. Cmd+Enter saves. Esc backs up</li>
+          <li>Alt+Shift+C copies the bundle for the agent</li>
+        </ol>
+
+        <h2>Keys</h2>
+        <ul>
+          <li>Alt+C — inspect</li>
+          <li>Tab / Shift+Tab — next / previous element</li>
+          <li>Arrows — move</li>
+          <li>Enter — cite this element</li>
+          <li>Cmd+Enter — save request</li>
+          <li>Alt+Shift+C — copy for agent</li>
+          <li>Alt+P — annotations</li>
+          <li>? — shortcut list</li>
+          <li>Esc — back</li>
+        </ul>
+
+        <h2>What gets copied</h2>
+        <ul>
+          <li>Selector — unique CSS path</li>
+          <li>Text — visible label</li>
+          <li>HTML — serialized element</li>
+          <li>CSS — type, color, radius, layout</li>
+          <li>Nearby — parent, previous, next</li>
+          <li>Box — size, viewport, scroll</li>
+          <li>URL — path and title</li>
+        </ul>
+
+        <h2>Demo</h2>
+        <p>
+          Harbor at <a href="./demo/">/demo</a> is a host page with intentional
+          inconsistencies — the primary button is 4px, the cards are 16px.
+          Annotate it.
+        </p>
+        <p>This page also has Cite loaded. Click Inspect and mark anything here.</p>
+
+        <h2>Local</h2>
+        <p>Annotations persist in localStorage, per page. The script makes no network calls.</p>
+
+        <p class="rule">–––</p>
+        <p class="links">
+          <a href="./demo/">Demo</a>
+          |
+          <a href="https://github.com/brijr/cite">GitHub</a>
+          |
+          <a href="./cite.js">cite.js</a>
+        </p>
+      </main>
+
+      <aside class="bundle" aria-label="Sample bundle">
+        <p class="label">bundle.md</p>
+        <pre>The following are visual change
+requests captured from a web page.
+Apply each request to the matching
+element.
+
+Page: /demo/pricing.html
+Title: Pricing — Harbor
+
+## Annotation 1
+
+Element: a.btn.btn-hero
+Selector: a.cta-primary
+Text: "Start building"
+Location: Pricing hero → primary CTA
+Box: 140×48 at 420,680
+
+Request:
+Make this button smaller and use
+the same radius as the cards.
+
+### HTML
+&lt;a class="btn btn-hero" href="#plans"&gt;
+  Start building
+&lt;/a&gt;
+
+### Computed CSS
+font-size: 17px;
+border-radius: 4px;
+background: oklch(0.42 0.08 155);</pre>
+      </aside>
+    </div>
+
+    <script src="./cite.js" data-project="home"></script>
+  </body>
+</html>

@@ -13,6 +13,34 @@
   const project = (script && script.dataset.project) || "local";
   const ROOT_ID = "cite-root";
   const storageKey = `cite:${project}:${location.origin}${location.pathname}`;
+  const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+  const KEY_INSPECT = IS_MAC ? "⌥C" : "Alt+C";
+  const KEY_COPY = IS_MAC ? "⌥⇧C" : "Alt+Shift+C";
+  const KEY_SAVE = IS_MAC ? "⌘↵" : "Ctrl+Enter";
+  const TARGET_SEL = [
+    "a[href]",
+    "button",
+    "input",
+    "textarea",
+    "select",
+    "summary",
+    '[role="button"]',
+    '[role="link"]',
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "img",
+    "label",
+    "li",
+    "p",
+    "article",
+    "section",
+    "aside",
+    "[data-testid]",
+    "[data-test]",
+  ].join(",");
+  const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "LINK", "META", "HEAD", "BR", "WBR"]);
 
   const STYLE_KEYS = [
     "display",
@@ -480,6 +508,11 @@
       white-space: nowrap;
       transition: background-color 140ms ease, color 140ms ease, transform 140ms var(--ease);
     }
+    kbd {
+      font: inherit;
+      color: var(--subtle);
+      margin-left: 6px;
+    }
     .toolbar button:hover { background: var(--bg-hover); color: var(--text); }
     .toolbar button:active { transform: scale(0.97); }
     .toolbar button.is-on {
@@ -517,6 +550,48 @@
       line-height: 1.3;
       pointer-events: none;
       white-space: nowrap;
+    }
+    .help {
+      position: fixed;
+      left: 50%;
+      bottom: 64px;
+      z-index: 8;
+      transform: translateX(-50%);
+      width: min(340px, calc(100vw - 24px));
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      background: var(--bg);
+      box-shadow:
+        0 0 0 1px oklch(1 0 0 / 0.08),
+        0 16px 40px oklch(0 0 0 / 0.32);
+      pointer-events: auto;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .help h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .help dl {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 3px 16px;
+      margin: 0;
+    }
+    .help dt {
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .help dd {
+      margin: 0;
+      color: var(--muted);
+    }
+    .composer-keys {
+      margin-right: auto;
+      color: var(--subtle);
+      font-size: 11px;
     }
     .panel {
       position: fixed;
@@ -717,7 +792,7 @@
         height: min(58vh, 480px);
       }
       .hint { display: none; }
-      .toolbar .wide-label { display: none; }
+      .toolbar .wide-label, .toolbar kbd, .composer-keys { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
       .toolbar button, .btn, .icon-btn { transition: none; }
@@ -733,6 +808,7 @@
     activeId: null,
     toast: "",
     hint: !sessionStorage.getItem("cite-hint"),
+    help: false,
   };
 
   let root;
@@ -763,11 +839,11 @@
         <div class="marks"></div>
         <div class="hint" hidden></div>
         <div class="toolbar" role="toolbar" aria-label="Cite">
-          <button type="button" data-act="inspect" aria-pressed="false">Inspect</button>
+          <button type="button" data-act="inspect" aria-pressed="false" aria-keyshortcuts="Alt+C">Inspect <kbd></kbd></button>
           <span class="sep"></span>
           <button type="button" class="count" data-act="panel" aria-label="Open annotations">0</button>
           <span class="sep"></span>
-          <button type="button" class="primary" data-act="copy">Copy <span class="wide-label">for agent</span></button>
+          <button type="button" class="primary" data-act="copy" aria-keyshortcuts="Alt+Shift+C">Copy <span class="wide-label">for agent</span> <kbd></kbd></button>
         </div>
         <aside class="panel" hidden>
           <header class="panel-head">
@@ -782,6 +858,7 @@
             <label class="sr-only" for="cite-request" hidden>Change request</label>
             <textarea id="cite-request" name="request" rows="4" placeholder="Make this button smaller and use the same radius as the cards."></textarea>
             <div class="row">
+              <span class="composer-keys"></span>
               <button type="button" class="btn" data-act="cancel">Cancel</button>
               <button type="submit" class="btn btn-primary" data-el="save">Save</button>
             </div>
@@ -792,6 +869,7 @@
             <button type="button" class="btn btn-primary" data-act="copy">Copy for agent</button>
           </footer>
         </aside>
+        <div class="help" hidden></div>
         <div class="toast" hidden></div>
       </div>
     `;
@@ -811,7 +889,14 @@
     els.save = shadow.querySelector('[data-el="save"]');
     els.list = shadow.querySelector('[data-el="list"]');
     els.empty = shadow.querySelector('[data-el="empty"]');
+    els.help = shadow.querySelector(".help");
     els.toast = shadow.querySelector(".toast");
+    els.inspectKbd = els.inspect.querySelector("kbd");
+    els.copyKbd = shadow.querySelector(".toolbar [data-act='copy'] kbd");
+    els.composerKeys = shadow.querySelector(".composer-keys");
+    if (els.inspectKbd) els.inspectKbd.textContent = KEY_INSPECT;
+    if (els.copyKbd) els.copyKbd.textContent = KEY_COPY;
+    if (els.composerKeys) els.composerKeys.textContent = `${KEY_SAVE} save · Esc cancel`;
 
     shadow.addEventListener("click", onUiClick);
     els.composer.addEventListener("submit", onSave);
@@ -835,7 +920,9 @@
     const toolbar = shadow.querySelector(".toolbar [data-act='copy']");
     const panel = shadow.querySelector(".panel-foot [data-act='copy']");
     if (toolbar) {
-      toolbar.innerHTML = copied ? "Copied" : 'Copy <span class="wide-label">for agent</span>';
+      toolbar.innerHTML = copied
+        ? "Copied"
+        : `Copy <span class="wide-label">for agent</span> <kbd>${KEY_COPY}</kbd>`;
     }
     if (panel) panel.textContent = copied ? "Copied" : "Copy for agent";
   }
@@ -860,7 +947,8 @@
     els.inspect.classList.toggle("is-on", next);
     els.inspect.setAttribute("aria-pressed", String(next));
     els.veil.hidden = !next;
-    if (!next) paintHighlight(null);
+    if (next) ensureHover();
+    else paintHighlight(null);
   }
 
   function setPanel(next) {
@@ -976,18 +1064,39 @@
   }
 
   function paintHint() {
-    if (state.toast) {
+    if (state.toast || state.help) {
       els.hint.hidden = true;
       return;
     }
-    if (state.inspect && !state.annotations.length) {
+    if (state.inspect) {
       els.hint.hidden = false;
-      els.hint.textContent = "Click an element on the page";
+      els.hint.textContent = `Tab next · Enter cite · ${KEY_INSPECT} inspect · ? keys`;
       return;
     }
     const showIntro = state.hint && !state.annotations.length && !state.panel;
     els.hint.hidden = !showIntro;
-    els.hint.textContent = "Click anything. Describe the change. Copy for an agent.";
+    els.hint.textContent = `${KEY_INSPECT} inspect · Tab to an element · Enter to cite`;
+  }
+
+  function paintHelp() {
+    if (!els.help) return;
+    els.help.hidden = !state.help;
+    if (!state.help) return;
+    els.help.innerHTML = `
+      <h3>Keys</h3>
+      <dl>
+        <dt>${escapeHtml(KEY_INSPECT)}</dt><dd>Inspect</dd>
+        <dt>Tab ⇧Tab</dt><dd>Next / previous element</dd>
+        <dt>↑ ↓ ← →</dt><dd>Move</dd>
+        <dt>Enter</dt><dd>Cite this element</dd>
+        <dt>${escapeHtml(KEY_SAVE)}</dt><dd>Save request</dd>
+        <dt>${escapeHtml(KEY_COPY)}</dt><dd>Copy for agent</dd>
+        <dt>${escapeHtml(IS_MAC ? "⌥P" : "Alt+P")}</dt><dd>Annotations</dd>
+        <dt>J K</dt><dd>Next / previous annotation</dd>
+        <dt>?</dt><dd>This list</dd>
+        <dt>Esc</dt><dd>Back</dd>
+      </dl>
+    `;
   }
 
   function sync() {
@@ -995,6 +1104,7 @@
     paintList();
     paintComposer();
     paintHint();
+    paintHelp();
     const locked = state.draft
       ? (() => {
           try {
@@ -1048,10 +1158,7 @@
     if (!button) return;
     const act = button.dataset.act;
     if (act === "inspect") {
-      dismissHint();
-      setInspect(!state.inspect);
-      if (!state.inspect && !state.annotations.length && !state.draft) setPanel(false);
-      sync();
+      toggleInspect();
       return;
     }
     if (act === "panel") {
@@ -1089,21 +1196,7 @@
       return;
     }
     if (act === "focus") {
-      state.activeId = button.dataset.id;
-      setPanel(true);
-      setInspect(false);
-      const annotation = state.annotations.find((item) => item.id === button.dataset.id);
-      if (annotation) {
-        try {
-          document.querySelector(annotation.target.selector)?.scrollIntoView({
-            block: "center",
-            behavior: "smooth",
-          });
-        } catch (_) {
-          /* ignore */
-        }
-      }
-      sync();
+      focusAnnotation(button.dataset.id);
     }
   }
 
@@ -1152,10 +1245,97 @@
     });
   }
 
-  function selectAt(event) {
-    const el = elementFromPoint(event);
+  function isCiteable(el) {
+    if (!(el instanceof Element)) return false;
+    if (SKIP_TAGS.has(el.tagName)) return false;
+    if (el === root || el.id === ROOT_ID || (el.closest && el.closest(`#${ROOT_ID}`))) return false;
+    const style = getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+      return false;
+    }
+    const rect = el.getBoundingClientRect();
+    return rect.width >= 8 && rect.height >= 8;
+  }
+
+  function collectTargets() {
+    const nodes = [...document.querySelectorAll(TARGET_SEL)].filter(isCiteable);
+    nodes.sort((a, b) => {
+      const ar = a.getBoundingClientRect();
+      const br = b.getBoundingClientRect();
+      if (Math.abs(ar.top - br.top) > 10) return ar.top - br.top;
+      return ar.left - br.left;
+    });
+    return nodes;
+  }
+
+  function ensureHover() {
+    if (state.hovered && document.contains(state.hovered) && isCiteable(state.hovered)) return;
+    const targets = collectTargets();
+    const inView = targets.find((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < window.innerHeight;
+    });
+    state.hovered = inView || targets[0] || null;
+  }
+
+  function revealHover() {
+    if (!state.hovered) return;
+    state.hovered.scrollIntoView({ block: "nearest", inline: "nearest" });
+    paintHighlight(state.hovered);
+  }
+
+  function moveTarget(delta) {
+    const targets = collectTargets();
+    if (!targets.length) return;
+    let index = state.hovered ? targets.indexOf(state.hovered) : -1;
+    if (index < 0) index = delta > 0 ? -1 : 0;
+    index = (index + delta + targets.length) % targets.length;
+    state.hovered = targets[index];
+    revealHover();
+  }
+
+  function moveTargetDir(dx, dy) {
+    const targets = collectTargets();
+    if (!targets.length) return;
+    ensureHover();
+    if (!state.hovered) {
+      state.hovered = targets[0];
+      revealHover();
+      return;
+    }
+    const origin = state.hovered.getBoundingClientRect();
+    const ox = origin.left + origin.width / 2;
+    const oy = origin.top + origin.height / 2;
+    let best = null;
+    let bestScore = Infinity;
+    for (const el of targets) {
+      if (el === state.hovered) continue;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const vx = cx - ox;
+      const vy = cy - oy;
+      const along = vx * dx + vy * dy;
+      if (along <= 4) continue;
+      const across = Math.abs(vx * dy + vy * dx);
+      const score = along + across * 3;
+      if (score < bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+    if (!best) {
+      moveTarget(dx + dy > 0 ? 1 : -1);
+      return;
+    }
+    state.hovered = best;
+    revealHover();
+  }
+
+  function citeElement(el) {
     if (!el) return;
     dismissHint();
+    state.help = false;
     state.draft = { target: captureTarget(el) };
     state.hovered = el;
     els.textarea.value = "";
@@ -1163,6 +1343,51 @@
     setInspect(false);
     sync();
     els.textarea.focus();
+  }
+
+  function focusAnnotation(id) {
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (!annotation) return;
+    state.activeId = id;
+    setPanel(true);
+    setInspect(false);
+    try {
+      document.querySelector(annotation.target.selector)?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    } catch (_) {
+      /* ignore */
+    }
+    sync();
+  }
+
+  function moveAnnotation(delta) {
+    if (!state.annotations.length) return;
+    const ids = state.annotations.map((item) => item.id);
+    let index = ids.indexOf(state.activeId);
+    if (index < 0) index = delta > 0 ? -1 : 0;
+    index = Math.max(0, Math.min(ids.length - 1, index + delta));
+    focusAnnotation(ids[index]);
+  }
+
+  function toggleInspect() {
+    dismissHint();
+    state.help = false;
+    setInspect(!state.inspect);
+    if (!state.inspect && !state.annotations.length && !state.draft) setPanel(false);
+    sync();
+  }
+
+  function toggleHelp() {
+    state.help = !state.help;
+    paintHelp();
+    paintHint();
+  }
+
+  function selectAt(event) {
+    const el = elementFromPoint(event);
+    if (el) citeElement(el);
   }
 
   function onPointerDown(event) {
@@ -1182,8 +1407,28 @@
     selectAt(event);
   }
 
+  function inComposer(event) {
+    const path = event.composedPath ? event.composedPath() : [event.target];
+    return path.includes(els.textarea);
+  }
+
+  function hostTyping(event) {
+    if (event.altKey || event.metaKey || event.ctrlKey) return false;
+    if (inComposer(event)) return true;
+    const el = event.target;
+    if (!(el instanceof HTMLElement)) return false;
+    if (el.isContentEditable) return true;
+    return /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+  }
+
   function onKey(event) {
     if (event.key === "Escape") {
+      event.preventDefault();
+      if (state.help) {
+        state.help = false;
+        sync();
+        return;
+      }
       if (state.draft) {
         state.draft = null;
         els.textarea.value = "";
@@ -1202,19 +1447,119 @@
       }
       return;
     }
-    const typing =
-      event.target instanceof HTMLElement &&
-      (event.target.isContentEditable ||
-        /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) ||
-        (event.composedPath &&
-          event.composedPath().some((node) => node === els.textarea)));
-    if (typing) return;
-    if (event.altKey && (event.key === "a" || event.key === "A")) {
-      event.preventDefault();
-      dismissHint();
-      setInspect(!state.inspect);
-      if (!state.inspect && !state.annotations.length && !state.draft) setPanel(false);
-      sync();
+
+    if (inComposer(event)) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        els.composer.requestSubmit();
+      }
+      return;
+    }
+
+    const key = event.key;
+    const letter = key.length === 1 ? key.toLowerCase() : key;
+
+    if (event.altKey && !event.metaKey && !event.ctrlKey) {
+      if (letter === "c" && event.shiftKey) {
+        event.preventDefault();
+        copyText(formatBundle(state.annotations));
+        return;
+      }
+      if (letter === "c" || letter === "a") {
+        event.preventDefault();
+        toggleInspect();
+        return;
+      }
+      if (letter === "p") {
+        event.preventDefault();
+        setPanel(!state.panel);
+        if (state.panel) setInspect(false);
+        sync();
+        return;
+      }
+    }
+
+    if (hostTyping(event)) return;
+
+    if (key === "?" || (event.shiftKey && key === "/")) {
+      if (state.inspect || state.panel || state.help) {
+        event.preventDefault();
+        toggleHelp();
+      }
+      return;
+    }
+
+    if (state.inspect) {
+      if (key === "Tab") {
+        event.preventDefault();
+        moveTarget(event.shiftKey ? -1 : 1);
+        return;
+      }
+      if (key === "ArrowDown" || letter === "j") {
+        event.preventDefault();
+        if (key === "ArrowDown") moveTargetDir(0, 1);
+        else moveTarget(1);
+        return;
+      }
+      if (key === "ArrowUp" || letter === "k") {
+        event.preventDefault();
+        if (key === "ArrowUp") moveTargetDir(0, -1);
+        else moveTarget(-1);
+        return;
+      }
+      if (key === "ArrowRight") {
+        event.preventDefault();
+        moveTargetDir(1, 0);
+        return;
+      }
+      if (key === "ArrowLeft") {
+        event.preventDefault();
+        moveTargetDir(-1, 0);
+        return;
+      }
+      if (key === "Enter" || key === " ") {
+        event.preventDefault();
+        ensureHover();
+        citeElement(state.hovered);
+        return;
+      }
+      if (letter === "c") {
+        event.preventDefault();
+        copyText(formatBundle(state.annotations));
+        return;
+      }
+    }
+
+    if (state.panel && !state.draft) {
+      if (letter === "j" || key === "ArrowDown") {
+        event.preventDefault();
+        moveAnnotation(1);
+        return;
+      }
+      if (letter === "k" || key === "ArrowUp") {
+        event.preventDefault();
+        moveAnnotation(-1);
+        return;
+      }
+      if (letter === "c") {
+        event.preventDefault();
+        const selected = state.annotations.find((item) => item.id === state.activeId);
+        copyText(formatBundle(selected ? [selected] : state.annotations));
+        return;
+      }
+      if (letter === "d" || key === "Backspace") {
+        if (!state.activeId) return;
+        event.preventDefault();
+        state.annotations = state.annotations.filter((item) => item.id !== state.activeId);
+        state.activeId = state.annotations[0] ? state.annotations[0].id : null;
+        persistAnnotations(state.annotations);
+        sync();
+        return;
+      }
+      if (letter === "i") {
+        event.preventDefault();
+        toggleInspect();
+      }
     }
   }
 
