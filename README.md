@@ -19,6 +19,48 @@ No accounts. No backend. No build step.
 
 Site: [cite.brijr.dev](https://cite.brijr.dev). Cite is loaded on that page.
 
+## Astro (dev only)
+
+In the root layout, at the end of `<body>`:
+
+```astro
+---
+const cite = import.meta.env.DEV;
+---
+
+<html>
+  <body>
+    <slot />
+    {cite && (
+      <script
+        is:inline
+        src="https://cite.brijr.dev/cite.js"
+        data-project="your-site"
+      />
+    )}
+  </body>
+</html>
+```
+
+`import.meta.env.DEV` is true only under `astro dev`. `astro build` drops the tag, so Cite never ships to production.
+
+`is:inline` keeps Astro from bundling the script.
+
+To vendor the file, copy `cite.js` into `public/` and set `src="/cite.js"`.
+
+To load on `astro preview` as well (the tag ships, then no-ops off localhost):
+
+```html
+<script is:inline>
+  if (["localhost", "127.0.0.1"].includes(location.hostname)) {
+    const s = document.createElement("script");
+    s.src = "https://cite.brijr.dev/cite.js";
+    s.dataset.project = "your-site";
+    document.body.append(s);
+  }
+</script>
+```
+
 ## Local
 
 ```bash

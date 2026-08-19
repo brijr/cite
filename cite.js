@@ -498,15 +498,16 @@
       border-radius: 999px;
       background: var(--bg);
       color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 500;
+      font-variant-ligatures: none;
+      letter-spacing: -0.04em;
+      line-height: 1;
       box-shadow:
         0 0 0 1px oklch(1 0 0 / 0.08),
         0 10px 30px oklch(0 0 0 / 0.28);
       transition: background-color 140ms ease, transform 140ms var(--ease);
-    }
-    .fab svg {
-      display: block;
-      width: 18px;
-      height: 18px;
     }
     .fab:hover { background: var(--bg-hover); }
     .fab:active { transform: scale(0.97); }
@@ -884,16 +885,7 @@
         <div class="marks"></div>
         <div class="hint" hidden></div>
         <div class="dock">
-          <button type="button" class="fab" data-act="open" aria-label="Open Cite" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 3.5h6v2.25H9z"/>
-              <path d="M8.25 5.75h7.5L17 13.25H7L8.25 5.75z"/>
-              <path d="M7 13.25h10"/>
-              <path d="M7 13.25 12 20.5 17 13.25"/>
-              <path d="M12 5.75v14.75"/>
-            </svg>
-            <span class="fab-count" hidden>0</span>
-          </button>
+          <button type="button" class="fab" data-act="open" aria-label="Open Cite" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">=><span class="fab-count" hidden>0</span></button>
           <div class="toolbar" role="toolbar" aria-label="Cite">
             <button type="button" data-act="inspect" aria-pressed="false" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">Feedback <kbd></kbd></button>
             <span class="sep"></span>

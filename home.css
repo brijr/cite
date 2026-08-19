@@ -124,6 +124,14 @@ pre {
 
 .snippet .copy:hover { color: var(--fg); }
 
+.snippet.prompt pre,
+.snippet.prompt code {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 ol {
   margin: 0;
   padding-left: 0;

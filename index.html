@@ -8,8 +8,8 @@
       name="description"
       content="A single script. Click an element, describe the change, copy a bundle for a coding agent."
     />
-    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./home.css?v=nopencil" />
+    <link rel="icon" href="./favicon.svg?v=arrow" type="image/svg+xml" />
+    <link rel="stylesheet" href="./home.css?v=oneline" />
   </head>
   <body>
     <div class="wrap">
@@ -24,7 +24,7 @@
         <h1>Click anything. Tell the agent what to change.</h1>
         <p class="intro">
           One script on any website. Click an element, describe the change, and
-          copy a bundle for Claude, Cursor, or Codex — selector, HTML, computed
+          copy a bundle for Claude, Cursor, or Codex. Selector, HTML, computed
           CSS, nearby DOM, and the request.
         </p>
         <p class="intro muted">No accounts. No backend. No build step.</p>
@@ -32,6 +32,32 @@
         <div class="snippet">
           <pre><code id="embed">&lt;script src="https://cite.brijr.dev/cite.js"&gt;&lt;/script&gt;</code></pre>
           <button type="button" class="copy" id="copy-embed">Copy</button>
+        </div>
+
+        <h2>Install</h2>
+        <p>Copy this into Claude, Cursor, or Codex.</p>
+        <div class="snippet prompt">
+          <pre><code id="install-prompt">Add Cite to this project for local development only. Never ship it to production.
+
+Cite: https://cite.brijr.dev/cite.js
+Docs: https://cite.brijr.dev
+
+One script. It overlays the page so you can click an element, describe the change, and copy a bundle (selector, HTML, computed CSS, nearby DOM, request) into a coding agent.
+
+Astro: in the root layout, at the end of body, render this only when import.meta.env.DEV is true. Use is:inline so Astro does not bundle it.
+
+&lt;script is:inline src="https://cite.brijr.dev/cite.js" data-project="PROJECT"&gt;&lt;/script&gt;
+
+Replace PROJECT with this repo's name.
+
+Other stacks: same script, only in dev. Next.js: process.env.NODE_ENV === "development". Vite: import.meta.env.DEV. Otherwise inject only when location.hostname is localhost or 127.0.0.1. data-project namespaces localStorage.
+
+Optional: vendor https://cite.brijr.dev/cite.js into public/cite.js and load /cite.js instead.
+
+Verify with the dev server: Cmd+Shift+F (Ctrl+Shift+F on Windows) opens Cite. A circle marked =&gt; appears in the bottom right.
+
+Do not add a package, backend, or auth.</code></pre>
+          <button type="button" class="copy" id="copy-prompt">Copy</button>
         </div>
 
         <h2>Use</h2>
@@ -43,15 +69,15 @@
         </ol>
 
         <h2>Keys</h2>
-        <pre class="keys">+--------------+------------------+
-| Cmd+Shift+F  | Inspect          |
-| Tab          | Next element     |
-| Enter        | Cite this        |
-| Cmd+Enter    | Save             |
-| C            | Copy and resolve |
-| ?            | All shortcuts    |
-| Esc          | Back             |
-+--------------+------------------+</pre>
+        <pre class="keys">+-----------------+------------------+
+| Cmd + Shift + F | Inspect          |
+| Tab             | Next element     |
+| Enter           | Cite this        |
+| Cmd + Enter     | Save             |
+| C               | Copy and resolve |
+| ?               | All shortcuts    |
+| Esc             | Back             |
++-----------------+------------------+</pre>
 
         <h2>Copied with each annotation</h2>
         <p>
@@ -70,26 +96,28 @@
     </div>
 
     <script>
-      const copyEmbed = document.getElementById("copy-embed");
-      const embed = document.getElementById("embed");
-      copyEmbed.addEventListener("click", async () => {
-        const text = embed.textContent.trim();
-        try {
-          await navigator.clipboard.writeText(text);
-        } catch (_) {
-          const helper = document.createElement("textarea");
-          helper.value = text;
-          document.body.appendChild(helper);
-          helper.select();
-          document.execCommand("copy");
-          helper.remove();
-        }
-        copyEmbed.textContent = "Copied";
-        setTimeout(() => {
-          copyEmbed.textContent = "Copy";
-        }, 1400);
-      });
+      function bindCopy(button, source) {
+        button.addEventListener("click", async () => {
+          const text = source.textContent.trim();
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch (_) {
+            const helper = document.createElement("textarea");
+            helper.value = text;
+            document.body.appendChild(helper);
+            helper.select();
+            document.execCommand("copy");
+            helper.remove();
+          }
+          button.textContent = "Copied";
+          setTimeout(() => {
+            button.textContent = "Copy";
+          }, 1400);
+        });
+      }
+      bindCopy(document.getElementById("copy-embed"), document.getElementById("embed"));
+      bindCopy(document.getElementById("copy-prompt"), document.getElementById("install-prompt"));
     </script>
-    <script src="./cite.js" data-project="home"></script>
+    <script src="./cite.js?v=arrow" data-project="home"></script>
   </body>
 </html>
