@@ -17,6 +17,11 @@
   const KEY_INSPECT = IS_MAC ? "⌘⇧ F" : "Ctrl+Shift+F";
   const KEY_COPY = "C";
   const KEY_SAVE = IS_MAC ? "⌘↵" : "Ctrl+Enter";
+  const CAPTURE_VERSION = 2;
+  const TEXT_LIMIT = 160;
+  const TITLE_LIMIT = 120;
+  const HTML_LIMIT = 1200;
+  const ATTRIBUTE_LIMIT = 200;
   const TARGET_SEL = [
     "a[href]",
     "button",
@@ -83,6 +88,59 @@
     "zIndex",
     "transform",
   ];
+  const BASE_STYLE_KEYS = [
+    "display",
+    "position",
+    "boxSizing",
+    "width",
+    "height",
+    "margin",
+    "padding",
+    "fontFamily",
+    "fontSize",
+    "fontWeight",
+    "lineHeight",
+    "textAlign",
+    "color",
+    "backgroundColor",
+    "border",
+    "borderRadius",
+  ];
+  const CONDITIONAL_STYLE_KEYS = [
+    "minWidth",
+    "minHeight",
+    "maxWidth",
+    "maxHeight",
+    "fontStyle",
+    "letterSpacing",
+    "textDecoration",
+    "textTransform",
+    "backgroundImage",
+    "boxShadow",
+    "outline",
+    "opacity",
+    "overflow",
+    "gap",
+    "zIndex",
+    "transform",
+  ];
+  const FLEX_STYLE_KEYS = [
+    "gap",
+    "flexDirection",
+    "flexWrap",
+    "alignItems",
+    "justifyContent",
+    "flex",
+  ];
+  const GRID_STYLE_KEYS = [
+    "gap",
+    "alignItems",
+    "justifyContent",
+    "gridTemplateColumns",
+    "gridTemplateRows",
+  ];
+  const SENSITIVE_ATTRIBUTE = /(?:^|[-_:])(?:auth(?:orization)?|cookie|credential|pass(?:word|wd)?|secret|session|token|api[-_]?key)(?:$|[-_:])/i;
+  const URL_ATTRIBUTES = new Set(["action", "formaction", "href", "poster", "src"]);
 
   const cssEscape =
     (window.CSS && CSS.escape) ||
@@ -111,6 +169,45 @@
     return `${text.slice(0, max - 1)}…`;
   }
 
+  function safeText(value, max = TEXT_LIMIT) {
+    return truncate(collapse(value), max);
+  }
+
+  function stripUrlDetails(value) {
+    const text = collapse(value);
+    if (!text) return "";
+    if (/^(?:blob|data|javascript):/i.test(text)) return "[redacted]";
+    try {
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(text)) {
+        const parsed = new URL(text, location.href);
+        parsed.username = "";
+        parsed.password = "";
+        parsed.search = "";
+        parsed.hash = "";
+        return truncate(parsed.href, ATTRIBUTE_LIMIT);
+      }
+    } catch (_) {
+      /* fall through to a conservative string cleanup */
+    }
+    return truncate(text.replace(/[?#].*$/, ""), ATTRIBUTE_LIMIT);
+  }
+
+  function safePageUrl(value) {
+    try {
+      const parsed = new URL(value || location.href, location.href);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return truncate(`${parsed.origin}${parsed.pathname}`, 400);
+      }
+      return truncate(parsed.pathname || parsed.protocol, 400);
+    } catch (_) {
+      return truncate(collapse(value).replace(/[?#].*$/, ""), 400);
+    }
+  }
+
+  function safePath(value) {
+    return truncate(collapse(value || location.pathname).replace(/[?#].*$/, ""), 300);
+  }
+
   function isOurEvent(event) {
     const path = event.composedPath ? event.composedPath() : [];
     return path.some((node) => node && node.id === ROOT_ID);
@@ -122,10 +219,16 @@
       el.getAttribute("aria-label") ||
       el.getAttribute("alt") ||
       el.getAttribute("title") ||
-      el.getAttribute("placeholder") ||
-      el.value;
-    if (labeled) return collapse(labeled);
-    return truncate(collapse(el.innerText || el.textContent || ""), 160);
+      el.getAttribute("placeholder");
+    if (labeled) return safeText(labeled);
+
+    const tag = el.tagName.toLowerCase();
+    if (tag === "input") {
+      const type = (el.getAttribute("type") || "text").toLowerCase();
+      return ["button", "reset", "submit"].includes(type) ? safeText(el.value) : "";
+    }
+    if (tag === "select" || tag === "textarea") return "";
+    return safeText(el.innerText || el.textContent || "");
   }
 
   function meaningfulClasses(el) {
@@ -244,23 +347,72 @@
     const computed = getComputedStyle(el);
     const styles = {};
     for (const key of STYLE_KEYS) {
-      styles[key] = computed[key];
+      styles[key] = sanitizeStyleValue(key, computed[key]);
     }
     return styles;
   }
 
-  function serializeHtml(el, max) {
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll("script, style, iframe, object, embed, link").forEach((node) => node.remove());
-    const walker = document.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT);
-    const nodes = [clone];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
+  function sanitizeStyleValue(key, value) {
+    let text = collapse(value);
+    if (!text) return "";
+    if (key === "backgroundImage" || /url\(/i.test(text)) {
+      text = text.replace(/url\(\s*(['"]?)(.*?)\1\s*\)/gi, (_match, _quote, url) => {
+        return `url("${stripUrlDetails(url)}")`;
+      });
+    }
+    return truncate(text, ATTRIBUTE_LIMIT);
+  }
+
+  function sanitizeHtmlTree(root) {
+    root.querySelectorAll("script, style, iframe, object, embed, link").forEach((node) => node.remove());
+    const nodes = root.nodeType === 1 ? [root, ...root.querySelectorAll("*")] : [...root.querySelectorAll("*")];
     for (const node of nodes) {
+      const tag = node.tagName.toLowerCase();
+      if (tag === "textarea") node.textContent = "";
+      if (["input", "option", "select", "textarea"].includes(tag)) {
+        node.removeAttribute("value");
+        node.removeAttribute("selected");
+      }
       for (const attr of [...node.attributes]) {
-        if (/^on/i.test(attr.name) || attr.name === "srcdoc") node.removeAttribute(attr.name);
+        const name = attr.name.toLowerCase();
+        if (
+          /^on/i.test(name) ||
+          name === "srcdoc" ||
+          name === "srcset" ||
+          name === "style" ||
+          SENSITIVE_ATTRIBUTE.test(name)
+        ) {
+          node.removeAttribute(attr.name);
+          continue;
+        }
+        if (URL_ATTRIBUTES.has(name) || name.endsWith(":href")) {
+          node.setAttribute(attr.name, stripUrlDetails(attr.value));
+          continue;
+        }
+        node.setAttribute(attr.name, truncate(attr.value, ATTRIBUTE_LIMIT));
       }
     }
+    return root;
+  }
+
+  function serializeHtml(el, max) {
+    const clone = el.cloneNode(true);
+    sanitizeHtmlTree(clone);
     return truncate(clone.outerHTML.replace(/\s+/g, " ").trim(), max);
+  }
+
+  function sanitizeStoredHtml(html) {
+    if (!html) return "";
+    const template = document.createElement("template");
+    template.innerHTML = String(html);
+    sanitizeHtmlTree(template.content);
+    return truncate(template.innerHTML.replace(/\s+/g, " ").trim(), HTML_LIMIT);
+  }
+
+  function nearbyLabel(el) {
+    if (!el) return "";
+    const text = visibleText(el);
+    return safeText(`${shortName(el)}${text ? ` ${JSON.stringify(text)}` : ""}`, 240);
   }
 
   function nearbyContext(el) {
@@ -268,10 +420,9 @@
     const prev = el.previousElementSibling;
     const next = el.nextElementSibling;
     return {
-      parent: parent ? shortName(parent) : "",
-      parentHtml: parent ? serializeHtml(parent, 900) : "",
-      previous: prev ? `${shortName(prev)} ${JSON.stringify(visibleText(prev))}` : "",
-      next: next ? `${shortName(next)} ${JSON.stringify(visibleText(next))}` : "",
+      parent: parent ? safeText(shortName(parent), 120) : "",
+      previous: nearbyLabel(prev),
+      next: nearbyLabel(next),
     };
   }
 
@@ -286,30 +437,60 @@
       text: visibleText(el),
       selector: uniqueSelector(el),
       trail: locationTrail(el),
-      href: el.getAttribute("href") || "",
       rect: {
         x: Math.round(rect.x),
         y: Math.round(rect.y),
         width: Math.round(rect.width),
         height: Math.round(rect.height),
       },
-      page: {
-        x: Math.round(rect.left + window.scrollX),
-        y: Math.round(rect.top + window.scrollY),
-      },
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      scroll: { x: window.scrollX, y: window.scrollY },
       styles: computedStyles(el),
-      html: serializeHtml(el, 1800),
+      html: serializeHtml(el, HTML_LIMIT),
       nearby: nearbyContext(el),
-      url: location.href,
-      path: location.pathname,
-      title: document.title,
+      url: safePageUrl(location.href),
+      path: safePath(location.pathname),
+      title: safeText(document.title, TITLE_LIMIT),
     };
   }
 
+  function isNeutralStyle(key, value) {
+    if (!value) return true;
+    const exact = {
+      backgroundImage: "none",
+      boxShadow: "none",
+      fontStyle: "normal",
+      gap: "normal",
+      letterSpacing: "normal",
+      maxHeight: "none",
+      maxWidth: "none",
+      minHeight: "0px",
+      minWidth: "0px",
+      opacity: "1",
+      overflow: "visible",
+      textDecoration: "none",
+      textTransform: "none",
+      transform: "none",
+      zIndex: "auto",
+    };
+    if (key === "outline") return value === "none" || /\bnone\b/.test(value);
+    return exact[key] === value;
+  }
+
+  function relevantStyleEntries(styles) {
+    const keys = new Set(BASE_STYLE_KEYS);
+    for (const key of CONDITIONAL_STYLE_KEYS) {
+      if (!isNeutralStyle(key, styles[key])) keys.add(key);
+    }
+    const display = styles.display || "";
+    if (display.includes("flex")) FLEX_STYLE_KEYS.forEach((key) => keys.add(key));
+    if (display.includes("grid")) GRID_STYLE_KEYS.forEach((key) => keys.add(key));
+    return [...keys]
+      .filter((key) => styles[key])
+      .map((key) => [key, styles[key]]);
+  }
+
   function formatStyles(styles) {
-    return Object.entries(styles)
+    return relevantStyleEntries(styles)
       .map(([key, value]) => {
         const cssKey = key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
         return `${cssKey}: ${value};`;
@@ -338,30 +519,28 @@
       target.html,
       "```",
       "",
-      "### Computed CSS",
+      "### Relevant CSS",
       "```css",
       formatStyles(target.styles),
       "```",
       "",
-      "### Nearby DOM",
+      "### Nearby elements",
       target.nearby.parent ? `Parent: ${target.nearby.parent}` : null,
       target.nearby.previous ? `Previous: ${target.nearby.previous}` : null,
       target.nearby.next ? `Next: ${target.nearby.next}` : null,
-      target.nearby.parentHtml
-        ? ["", "```html", target.nearby.parentHtml, "```"].join("\n")
-        : null,
     ]
       .filter((line) => line !== null)
       .join("\n");
   }
 
   function formatBundle(annotations) {
-    if (!annotations.length) return "";
-    const first = annotations[0].target;
+    const safeAnnotations = annotations.map(normalizeAnnotation).filter(Boolean);
+    if (!safeAnnotations.length) return "";
+    const first = safeAnnotations[0].target;
     const header = [
       "The following are visual change requests captured from a web page.",
       "Apply each request to the matching element.",
-      "Treat the selector, HTML, and computed CSS as ground truth for what is on the page now.",
+      "The selector and rendered context describe the page at the captured viewport.",
       "",
       `Page: ${first.path}`,
       `Title: ${first.title}`,
@@ -369,7 +548,76 @@
       "",
       "",
     ];
-    return `${header.join("\n")}${annotations.map(formatAnnotation).join("\n\n")}\n`;
+    return `${header.join("\n")}${safeAnnotations.map(formatAnnotation).join("\n\n")}\n`;
+  }
+
+  function safeNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.round(number) : 0;
+  }
+
+  function normalizeStyles(styles) {
+    const normalized = {};
+    for (const key of STYLE_KEYS) {
+      if (styles && styles[key] != null) normalized[key] = sanitizeStyleValue(key, styles[key]);
+    }
+    return normalized;
+  }
+
+  function normalizeTarget(target) {
+    if (!target || typeof target !== "object") return null;
+    const tag = safeText(target.tag, 32).toLowerCase();
+    const role = safeText(target.role, 64).toLowerCase();
+    const formValue = tag === "textarea" || tag === "select" || (tag === "input" && !["button", "reset", "submit"].includes(role));
+    const nearby = target.nearby && typeof target.nearby === "object" ? target.nearby : {};
+    const rect = target.rect && typeof target.rect === "object" ? target.rect : {};
+    const viewport = target.viewport && typeof target.viewport === "object" ? target.viewport : {};
+    return {
+      tag,
+      name: safeText(target.name || tag || "element", 240),
+      id: safeText(target.id, 160),
+      classes: Array.isArray(target.classes)
+        ? target.classes.slice(0, 3).map((name) => safeText(name, 120))
+        : [],
+      role,
+      text: formValue ? "" : safeText(target.text),
+      selector: String(target.selector || "").trim(),
+      trail: safeText(target.trail, 240),
+      rect: {
+        x: safeNumber(rect.x),
+        y: safeNumber(rect.y),
+        width: safeNumber(rect.width),
+        height: safeNumber(rect.height),
+      },
+      viewport: {
+        width: safeNumber(viewport.width),
+        height: safeNumber(viewport.height),
+      },
+      styles: normalizeStyles(target.styles),
+      html: sanitizeStoredHtml(target.html),
+      nearby: {
+        parent: safeText(nearby.parent, 120),
+        previous: safeText(nearby.previous, 240),
+        next: safeText(nearby.next, 240),
+      },
+      url: safePageUrl(target.url),
+      path: safePath(target.path),
+      title: safeText(target.title, TITLE_LIMIT),
+    };
+  }
+
+  function normalizeAnnotation(annotation) {
+    if (!annotation || typeof annotation !== "object") return null;
+    const target = normalizeTarget(annotation.target);
+    const request = collapse(annotation.request);
+    if (!target || !request) return null;
+    return {
+      id: safeText(annotation.id || uid(), 200),
+      createdAt: safeText(annotation.createdAt, 80),
+      captureVersion: CAPTURE_VERSION,
+      request,
+      target,
+    };
   }
 
   function loadAnnotations() {
@@ -377,7 +625,11 @@
       const raw = localStorage.getItem(storageKey);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      const normalized = parsed.map(normalizeAnnotation).filter(Boolean);
+      const next = JSON.stringify(normalized);
+      if (next !== raw) localStorage.setItem(storageKey, next);
+      return normalized;
     } catch (_) {
       return [];
     }
@@ -1284,12 +1536,14 @@
     if (!state.draft) return;
     const request = collapse(els.textarea.value);
     if (!request) return;
-    state.annotations.push({
+    const annotation = normalizeAnnotation({
       id: uid(),
       createdAt: new Date().toISOString(),
       request,
       target: state.draft.target,
     });
+    if (!annotation) return;
+    state.annotations.push(annotation);
     persistAnnotations(state.annotations);
     state.draft = null;
     state.activeId = state.annotations[state.annotations.length - 1].id;

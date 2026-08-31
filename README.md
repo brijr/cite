@@ -2,7 +2,7 @@
 
 Click anything on a web page. Tell a coding agent what to change.
 
-Cite is a single embeddable script. It injects an isolated overlay (Shadow DOM), captures the clicked element, and copies a bundle — selector, HTML, computed CSS, nearby DOM, and the written request — ready to paste into Claude, Cursor, or Codex.
+Cite is a single embeddable script. It injects an isolated overlay (Shadow DOM), captures the clicked element, and copies a compact bundle — selector, HTML, relevant rendered CSS, nearby elements, and the written request — ready to paste into Claude, Cursor, or Codex.
 
 No accounts. No backend. No build step.
 
@@ -88,6 +88,8 @@ Serves `cite.js` at [cite.brijr.dev/cite.js](https://cite.brijr.dev/cite.js).
 
 Annotations persist per page in `localStorage`. Marks stay on the page so you can stack several requests, then copy them as one bundle.
 
+Cite omits live form values, URL query strings and fragments, and sensitive HTML attributes from stored and copied annotations.
+
 ## Bundle
 
 The copied text looks like this:
@@ -95,6 +97,7 @@ The copied text looks like this:
 ```text
 The following are visual change requests captured from a web page.
 Apply each request to the matching element.
+The selector and rendered context describe the page at the captured viewport.
 
 Page: /
 Title: Cite — click anything, tell the agent what to change
@@ -113,9 +116,9 @@ Make this button smaller and use the same radius as the cards.
 ### HTML
 ...
 
-### Computed CSS
+### Relevant CSS
 ...
 
-### Nearby DOM
+### Nearby elements
 ...
 ```

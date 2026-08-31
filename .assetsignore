@@ -11,3 +11,4 @@ README.md
 CONTEXT.md
 .DS_Store
 .tmp-*
+test/
