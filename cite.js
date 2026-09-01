@@ -121,6 +121,7 @@
     "opacity",
     "overflow",
     "gap",
+    "flex",
     "zIndex",
     "transform",
   ];
@@ -130,7 +131,6 @@
     "flexWrap",
     "alignItems",
     "justifyContent",
-    "flex",
   ];
   const GRID_STYLE_KEYS = [
     "gap",
@@ -369,7 +369,7 @@
     for (const node of nodes) {
       const tag = node.tagName.toLowerCase();
       if (tag === "textarea") node.textContent = "";
-      if (["input", "option", "select", "textarea"].includes(tag)) {
+      if (["button", "input", "option", "select", "textarea"].includes(tag)) {
         node.removeAttribute("value");
         node.removeAttribute("selected");
       }
@@ -443,6 +443,10 @@
         width: Math.round(rect.width),
         height: Math.round(rect.height),
       },
+      page: {
+        x: Math.round(rect.left + window.scrollX),
+        y: Math.round(rect.top + window.scrollY),
+      },
       viewport: { width: window.innerWidth, height: window.innerHeight },
       styles: computedStyles(el),
       html: serializeHtml(el, HTML_LIMIT),
@@ -458,6 +462,7 @@
     const exact = {
       backgroundImage: "none",
       boxShadow: "none",
+      flex: "0 1 auto",
       fontStyle: "normal",
       gap: "normal",
       letterSpacing: "normal",
@@ -534,7 +539,7 @@
   }
 
   function formatBundle(annotations) {
-    const safeAnnotations = annotations.map(normalizeAnnotation).filter(Boolean);
+    const safeAnnotations = annotations.map((annotation) => normalizeAnnotation(annotation)).filter(Boolean);
     if (!safeAnnotations.length) return "";
     const first = safeAnnotations[0].target;
     const header = [
@@ -564,13 +569,14 @@
     return normalized;
   }
 
-  function normalizeTarget(target) {
+  function normalizeTarget(target, { dropNearbySiblings = false } = {}) {
     if (!target || typeof target !== "object") return null;
     const tag = safeText(target.tag, 32).toLowerCase();
     const role = safeText(target.role, 64).toLowerCase();
     const formValue = tag === "textarea" || tag === "select" || (tag === "input" && !["button", "reset", "submit"].includes(role));
     const nearby = target.nearby && typeof target.nearby === "object" ? target.nearby : {};
     const rect = target.rect && typeof target.rect === "object" ? target.rect : {};
+    const page = target.page && typeof target.page === "object" ? target.page : null;
     const viewport = target.viewport && typeof target.viewport === "object" ? target.viewport : {};
     return {
       tag,
@@ -589,6 +595,12 @@
         width: safeNumber(rect.width),
         height: safeNumber(rect.height),
       },
+      page: page
+        ? {
+            x: safeNumber(page.x),
+            y: safeNumber(page.y),
+          }
+        : null,
       viewport: {
         width: safeNumber(viewport.width),
         height: safeNumber(viewport.height),
@@ -597,8 +609,8 @@
       html: sanitizeStoredHtml(target.html),
       nearby: {
         parent: safeText(nearby.parent, 120),
-        previous: safeText(nearby.previous, 240),
-        next: safeText(nearby.next, 240),
+        previous: dropNearbySiblings ? "" : safeText(nearby.previous, 240),
+        next: dropNearbySiblings ? "" : safeText(nearby.next, 240),
       },
       url: safePageUrl(target.url),
       path: safePath(target.path),
@@ -606,9 +618,11 @@
     };
   }
 
-  function normalizeAnnotation(annotation) {
+  function normalizeAnnotation(annotation, { migrateLegacy = false } = {}) {
     if (!annotation || typeof annotation !== "object") return null;
-    const target = normalizeTarget(annotation.target);
+    const target = normalizeTarget(annotation.target, {
+      dropNearbySiblings: migrateLegacy && Number(annotation.captureVersion) !== CAPTURE_VERSION,
+    });
     const request = collapse(annotation.request);
     if (!target || !request) return null;
     return {
@@ -626,9 +640,17 @@
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
-      const normalized = parsed.map(normalizeAnnotation).filter(Boolean);
+      const normalized = parsed
+        .map((annotation) => normalizeAnnotation(annotation, { migrateLegacy: true }))
+        .filter(Boolean);
       const next = JSON.stringify(normalized);
-      if (next !== raw) localStorage.setItem(storageKey, next);
+      if (next !== raw) {
+        try {
+          localStorage.setItem(storageKey, next);
+        } catch (_) {
+          /* migration persistence is best-effort */
+        }
+      }
       return normalized;
     } catch (_) {
       return [];

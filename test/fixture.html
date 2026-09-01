@@ -22,6 +22,9 @@
         justify-content: space-between;
         gap: 16px;
       }
+      .flex-item {
+        flex: 1 1 0%;
+      }
       .grid-target {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -55,7 +58,7 @@
     </section>
 
     <section class="flex-target" aria-label="Flexible toolbar">
-      <button type="button">Previous</button>
+      <button class="flex-item" type="button" value="fixture-button-secret">Previous</button>
       <button
         type="button"
         aria-label="A deliberately long button label used to verify that all labeled text is capped before it reaches persistent storage or a copied feedback bundle, even when the source attribute continues far beyond a normal interface label length"
@@ -70,7 +73,8 @@
     </section>
 
     <script>
-      if (new URLSearchParams(location.search).has("legacy")) {
+      const fixtureParams = new URLSearchParams(location.search);
+      if (fixtureParams.has("legacy")) {
         const key = `cite:fixture:${location.origin}${location.pathname}`;
         localStorage.setItem(key, JSON.stringify([{
           id: "legacy-fixture",
@@ -86,15 +90,26 @@
             selector: "#account-password",
             trail: "Account details → input#legacy",
             rect: { x: 10, y: 20, width: 200, height: 40 },
+            page: { x: 410, y: 920 },
             viewport: { width: 1280, height: 720 },
             styles: { display: "inline-block", backgroundImage: "url(data:image/svg+xml,fixture-style-secret)" },
             html: "<input id=\"legacy\" value=\"fixture-legacy-html-secret\" data-auth-token=\"fixture-legacy-attribute-secret\">",
-            nearby: { parent: "form", parentHtml: "fixture-legacy-parent-secret" },
+            nearby: {
+              parent: "form",
+              previous: "input \"fixture-legacy-previous-secret\"",
+              next: "textarea \"fixture-legacy-next-secret\"",
+              parentHtml: "fixture-legacy-parent-secret"
+            },
             url: `${location.origin}${location.pathname}?token=fixture-legacy-url-secret#private`,
             path: location.pathname,
             title: document.title
           }
         }]));
+      }
+      if (fixtureParams.has("readonly")) {
+        Storage.prototype.setItem = function () {
+          throw new DOMException("Fixture storage is read-only", "QuotaExceededError");
+        };
       }
     </script>
     <script src="../cite.js" data-project="fixture"></script>
