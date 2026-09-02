@@ -54,6 +54,8 @@
       <select aria-label="Account">
         <option value="fixture-option-secret" selected>Primary account</option>
       </select>
+      <sl-input value="fixture-custom-control-secret" aria-label="Customer reference">Customer reference</sl-input>
+      <progress value="50" max="100">50%</progress>
       <a href="/account?token=fixture-link-secret#private">Account link</a>
     </section>
 
@@ -82,7 +84,14 @@
       data-requestverificationtoken="fixture-request-verification-secret"
       data-antiforgery="fixture-antiforgery-secret"
       data-csrfish="ordinary-control"
+      data-url="https://fixture-user:fixture-pass@example.test/custom?token=fixture-data-url-secret#private"
+      data-endpoint="/api/items?token=fixture-endpoint-secret#private"
+      data-api-url="//fixture-user:fixture-pass@example.test/alternate?token=fixture-api-url-secret#private"
+      data-urlish="ordinary?keep#fragment"
       base="ordinary?keep#fragment"
+      resource="https://fixture-user:fixture-pass@example.test/rdfa?token=fixture-resource-secret#private"
+      property="name https://example.test/property?token=fixture-property-secret#private"
+      xmlns:fixture="https://fixture-user:fixture-pass@example.test/ns?token=fixture-xmlns-secret#private"
     >
       <blockquote cite="/source?token=fixture-cite-secret#private">Quoted context</blockquote>
       <a
@@ -119,6 +128,17 @@
 
     <section id="oversized-html-target">
       <strong>Visible target context survives bounded serialization.</strong>
+    </section>
+
+    <section aria-label="Nearby visibility fixture">
+      <p class="visible-before">Visible previous context</p>
+      <script type="application/json">{"token":"fixture-nearby-script-secret"}</script>
+      <div><span hidden>fixture-nearby-hidden-descendant-secret</span></div>
+      <button id="nearby-visibility-target" type="button">Review nearby context</button>
+      <div hidden>fixture-nearby-hidden-secret</div>
+      <div class="visible-after" style="display: contents"><span>Visible next context</span></div>
+      <button id="nearby-override-target" type="button">Review visibility override</button>
+      <div class="visible-override" style="visibility: hidden"><span style="visibility: visible">Visible override context</span></div>
     </section>
 
     <iframe
@@ -171,7 +191,7 @@
           id: "v2-fixture",
           createdAt: "2026-09-01T00:00:00.000Z",
           captureVersion: 2,
-          request: "Keep safe migrated context.",
+          request: "Migrate ambiguous nearby context safely.",
           target: {
             tag: "button",
             name: "button#v2",
@@ -188,7 +208,7 @@
             html: "<button id=\"v2\" value=\"fixture-v2-button-value-secret\">Continue</button>",
             nearby: {
               parent: "div.toolbar",
-              previous: "div.status \"Safe sibling context\"",
+              previous: "div.hidden \"fixture-v2-hidden-nearby-secret\"",
               next: "input \"fixture-v2-nearby-secret\""
             },
             url: `${location.origin}${location.pathname}`,

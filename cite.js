@@ -17,7 +17,7 @@
   const KEY_INSPECT = IS_MAC ? "⌘⇧ F" : "Ctrl+Shift+F";
   const KEY_COPY = "C";
   const KEY_SAVE = IS_MAC ? "⌘↵" : "Ctrl+Enter";
-  const CAPTURE_VERSION = 3;
+  const CAPTURE_VERSION = 4;
   const TEXT_LIMIT = 160;
   const TITLE_LIMIT = 120;
   const HTML_LIMIT = 1200;
@@ -141,8 +141,12 @@
   ];
   const SENSITIVE_ATTRIBUTE = /(?:^|[-_:])(?:anti[-_]?forgery(?:token)?|auth(?:orization)?|cookie|credential|csrf(?:middlewaretoken|token)?|nonce|pass(?:word|wd)?|requestverificationtoken|secret|session|token|xsrf(?:token)?|api[-_]?key)(?:$|[-_:])/i;
   const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
+  const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
+  const FORM_VALUE_TAGS = new Set(["button", "input", "option", "select", "textarea"]);
+  const SERIALIZED_FORM_STRUCTURE_TAGS = new Set(["OPTION", "OPTGROUP"]);
   const URL_ATTRIBUTES = new Set([
     "action",
+    "about",
     "background",
     "cite",
     "classid",
@@ -156,11 +160,15 @@
     "manifest",
     "poster",
     "profile",
+    "resource",
     "src",
     "usemap",
+    "vocab",
   ]);
   const URL_LIST_ATTRIBUTES = new Set(["archive", "attributionsrc", "itemtype", "ping"]);
   const URL_CANDIDATE_ATTRIBUTES = new Set(["imagesrcset", "srcset"]);
+  const URL_NAMED_ATTRIBUTE = /(?:^|[-_:])(?:endpoint|href|resource|src|url|uri)(?:$|[-_:])/i;
+  const RDFa_URL_LIST_ATTRIBUTES = new Set(["datatype", "prefix", "property", "rel", "rev", "typeof"]);
   const URL_FUNCTION_ATTRIBUTES = new Set([
     "clip-path",
     "color-profile",
@@ -291,6 +299,66 @@
     return /^(?:button|input|option|select|textarea)(?:[#.\s]|$)/i.test(text) ? "" : text;
   }
 
+  function hasBlockingRenderState(el) {
+    let node = el;
+    while (node && node instanceof Element) {
+      const style = getComputedStyle(node);
+      if (
+        style.display === "none" ||
+        Number(style.opacity) === 0 ||
+        style.contentVisibility === "hidden"
+      ) {
+        return true;
+      }
+      node = node.parentElement;
+    }
+    return false;
+  }
+
+  function hasVisibleBox(el) {
+    if (hasBlockingRenderState(el)) return false;
+    const visibility = getComputedStyle(el).visibility;
+    if (visibility === "hidden" || visibility === "collapse") return false;
+    return [...el.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0);
+  }
+
+  function isRenderedTextNode(textNode) {
+    if (!collapse(textNode && textNode.nodeValue)) return false;
+    const parent = textNode.parentElement;
+    if (!parent || SKIP_TAGS.has(parent.tagName) || hasBlockingRenderState(parent)) return false;
+    const visibility = getComputedStyle(parent).visibility;
+    if (visibility === "hidden" || visibility === "collapse") return false;
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    return [...range.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0);
+  }
+
+  function renderedTextFromRanges(el) {
+    const parts = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+    while (textNode) {
+      if (isRenderedTextNode(textNode)) parts.push(textNode.nodeValue);
+      textNode = walker.nextNode();
+    }
+    return safeText(parts.join(" "));
+  }
+
+  function visibleRenderedText(el) {
+    if (hasVisibleBox(el) && typeof el.innerText === "string") {
+      return safeText(el.innerText);
+    }
+    return renderedTextFromRanges(el);
+  }
+
+  function isRenderedElement(el) {
+    if (!(el instanceof Element) || SKIP_TAGS.has(el.tagName) || hasBlockingRenderState(el)) {
+      return false;
+    }
+    if (hasVisibleBox(el) || visibleRenderedText(el)) return true;
+    return [...el.querySelectorAll("*")].some(hasVisibleBox);
+  }
+
   function isOurEvent(event) {
     const path = event.composedPath ? event.composedPath() : [];
     return path.some((node) => node && node.id === ROOT_ID);
@@ -311,7 +379,7 @@
       return ["button", "reset", "submit"].includes(type) ? safeText(el.value) : "";
     }
     if (tag === "select" || tag === "textarea") return "";
-    return safeText(el.innerText || el.textContent || "");
+    return visibleRenderedText(el);
   }
 
   function meaningfulClasses(el) {
@@ -390,9 +458,11 @@
   function headingNear(el) {
     let node = el;
     while (node && node !== document.body) {
-      const heading = node.querySelector && node.querySelector("h1, h2, h3");
+      const heading =
+        node.querySelectorAll &&
+        [...node.querySelectorAll("h1, h2, h3")].find(isRenderedElement);
       if (heading && heading !== el) {
-        const text = collapse(heading.textContent || "");
+        const text = visibleText(heading);
         if (text) return truncate(text, 48);
       }
       const landmark =
@@ -409,7 +479,7 @@
     let node = el;
     while (node && node !== document.body && crumbs.length < 4) {
       const heading = node.matches && node.matches("h1, h2, h3, h4")
-        ? collapse(node.textContent || "")
+        ? visibleText(node)
         : "";
       const label =
         heading ||
@@ -444,13 +514,27 @@
     return truncate(text, ATTRIBUTE_LIMIT);
   }
 
-  function sanitizeHtmlTree(root) {
+  function hasHiddenInlineStyle(node, includeVisibility = true) {
+    const { display, visibility, opacity, contentVisibility } = node.style;
+    return (
+      display === "none" ||
+      (includeVisibility && (visibility === "hidden" || visibility === "collapse")) ||
+      (opacity !== "" && Number(opacity) === 0) ||
+      contentVisibility === "hidden"
+    );
+  }
+
+  function sanitizeHtmlTree(root, { renderedPruned = false } = {}) {
     root.querySelectorAll("script, style, iframe, object, embed, link, meta").forEach((node) => node.remove());
+    if (root.hasAttribute("hidden") || hasHiddenInlineStyle(root, !renderedPruned)) root.replaceChildren();
+    root.querySelectorAll("[hidden], [style]").forEach((node) => {
+      if (node.hasAttribute("hidden") || hasHiddenInlineStyle(node, !renderedPruned)) node.remove();
+    });
     const nodes = root.nodeType === 1 ? [root, ...root.querySelectorAll("*")] : [...root.querySelectorAll("*")];
     for (const node of nodes) {
       const tag = node.tagName.toLowerCase();
       if (tag === "textarea") node.textContent = "";
-      if (["button", "input", "option", "select", "textarea"].includes(tag)) {
+      if (FORM_VALUE_TAGS.has(tag) || tag.includes("-")) {
         node.removeAttribute("value");
         node.removeAttribute("selected");
       }
@@ -471,14 +555,24 @@
           attr.value = sanitizeUrlList(attr.value);
           continue;
         }
-        if (name === "itemprop") {
+        if (name === "itemprop" || RDFa_URL_LIST_ATTRIBUTES.has(name)) {
           attr.value = sanitizeUrlList(attr.value, true);
           continue;
         }
         const isXmlBase =
           qualifiedName === "xml:base" &&
           (attr.namespaceURI === null || attr.namespaceURI === XML_NAMESPACE);
-        if (URL_ATTRIBUTES.has(name) || (tag === "object" && name === "data") || isXmlBase) {
+        const isXmlnsUrl =
+          qualifiedName === "xmlns" ||
+          qualifiedName.startsWith("xmlns:") ||
+          attr.namespaceURI === XMLNS_NAMESPACE;
+        if (
+          URL_ATTRIBUTES.has(name) ||
+          URL_NAMED_ATTRIBUTE.test(qualifiedName) ||
+          (tag === "object" && name === "data") ||
+          isXmlBase ||
+          isXmlnsUrl
+        ) {
           attr.value = stripUrlDetails(attr.value);
           continue;
         }
@@ -568,9 +662,43 @@
     return compactSerializedHtml(bounded);
   }
 
-  function serializeHtml(el, max) {
+  function cloneRenderedSubtree(el) {
     const clone = el.cloneNode(true);
-    sanitizeHtmlTree(clone);
+    const sourceTextNodes = [];
+    const cloneTextNodes = [];
+    const sourceTextWalker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const cloneTextWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+    let sourceTextNode = sourceTextWalker.nextNode();
+    let cloneTextNode = cloneTextWalker.nextNode();
+    while (sourceTextNode && cloneTextNode) {
+      sourceTextNodes.push(sourceTextNode);
+      cloneTextNodes.push(cloneTextNode);
+      sourceTextNode = sourceTextWalker.nextNode();
+      cloneTextNode = cloneTextWalker.nextNode();
+    }
+    for (let index = sourceTextNodes.length - 1; index >= 0; index -= 1) {
+      const parent = sourceTextNodes[index].parentElement;
+      if (
+        !isRenderedTextNode(sourceTextNodes[index]) &&
+        !SERIALIZED_FORM_STRUCTURE_TAGS.has(parent && parent.tagName)
+      ) {
+        cloneTextNodes[index].remove();
+      }
+    }
+    const sourceNodes = [el, ...el.querySelectorAll("*")];
+    const cloneNodes = [clone, ...clone.querySelectorAll("*")];
+    for (let index = sourceNodes.length - 1; index > 0; index -= 1) {
+      const source = sourceNodes[index];
+      if (!isRenderedElement(source) && !SERIALIZED_FORM_STRUCTURE_TAGS.has(source.tagName)) {
+        cloneNodes[index].remove();
+      }
+    }
+    return clone;
+  }
+
+  function serializeHtml(el, max) {
+    const clone = cloneRenderedSubtree(el);
+    sanitizeHtmlTree(clone, { renderedPruned: true });
     return serializeSanitizedHtml(clone, max);
   }
 
@@ -587,15 +715,21 @@
   }
 
   function nearbyLabel(el) {
-    if (!el) return "";
+    if (!isRenderedElement(el)) return "";
     const text = visibleText(el);
     return safeText(`${shortName(el)}${text ? ` ${JSON.stringify(text)}` : ""}`, 240);
   }
 
+  function renderedSibling(el, direction) {
+    let sibling = el[direction];
+    while (sibling && !isRenderedElement(sibling)) sibling = sibling[direction];
+    return sibling;
+  }
+
   function nearbyContext(el) {
     const parent = el.parentElement;
-    const prev = el.previousElementSibling;
-    const next = el.nextElementSibling;
+    const prev = renderedSibling(el, "previousElementSibling");
+    const next = renderedSibling(el, "nextElementSibling");
     return {
       parent: parent ? safeText(shortName(parent), 120) : "",
       previous: nearbyLabel(prev),
@@ -820,10 +954,10 @@
     if (!annotation || typeof annotation !== "object") return null;
     const version = Number(annotation.captureVersion);
     const isLegacy = migrateLegacy && version !== CAPTURE_VERSION;
-    const isPreV2 = isLegacy && (!Number.isFinite(version) || version < 2);
+    const hasAmbiguousValueText = isLegacy && (!Number.isFinite(version) || version < 3);
     const target = normalizeTarget(annotation.target, {
-      dropLegacyValueText: isLegacy,
-      dropLegacyNearby: isPreV2,
+      dropLegacyValueText: hasAmbiguousValueText,
+      dropLegacyNearby: isLegacy,
       scrubLegacyNearby: isLegacy,
     });
     const request = collapse(annotation.request);
@@ -1805,13 +1939,8 @@
   }
 
   function isCiteable(el) {
-    if (!(el instanceof Element)) return false;
-    if (SKIP_TAGS.has(el.tagName)) return false;
+    if (!isRenderedElement(el)) return false;
     if (el === root || el.id === ROOT_ID || (el.closest && el.closest(`#${ROOT_ID}`))) return false;
-    const style = getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
-      return false;
-    }
     const rect = el.getBoundingClientRect();
     return rect.width >= 8 && rect.height >= 8;
   }
