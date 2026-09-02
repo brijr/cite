@@ -139,8 +139,50 @@
     "gridTemplateColumns",
     "gridTemplateRows",
   ];
-  const SENSITIVE_ATTRIBUTE = /(?:^|[-_:])(?:auth(?:orization)?|cookie|credential|pass(?:word|wd)?|secret|session|token|api[-_]?key)(?:$|[-_:])/i;
-  const URL_ATTRIBUTES = new Set(["action", "formaction", "href", "poster", "src"]);
+  const SENSITIVE_ATTRIBUTE = /(?:^|[-_:])(?:auth(?:orization)?|cookie|credential|nonce|pass(?:word|wd)?|secret|session|token|api[-_]?key)(?:$|[-_:])/i;
+  const URL_ATTRIBUTES = new Set([
+    "action",
+    "background",
+    "cite",
+    "classid",
+    "codebase",
+    "dynsrc",
+    "formaction",
+    "href",
+    "itemid",
+    "longdesc",
+    "lowsrc",
+    "manifest",
+    "poster",
+    "profile",
+    "src",
+    "usemap",
+  ]);
+  const URL_LIST_ATTRIBUTES = new Set(["archive", "attributionsrc", "itemtype", "ping"]);
+  const URL_CANDIDATE_ATTRIBUTES = new Set(["imagesrcset", "srcset"]);
+  const URL_FUNCTION_ATTRIBUTES = new Set([
+    "clip-path",
+    "color-profile",
+    "cursor",
+    "fill",
+    "filter",
+    "marker",
+    "marker-end",
+    "marker-mid",
+    "marker-start",
+    "mask",
+    "stroke",
+  ]);
+  const HTML_CONTEXT_ATTRIBUTES = new Set([
+    "aria-label",
+    "class",
+    "data-test",
+    "data-testid",
+    "id",
+    "name",
+    "role",
+    "type",
+  ]);
 
   const cssEscape =
     (window.CSS && CSS.escape) ||
@@ -190,6 +232,25 @@
       /* fall through to a conservative string cleanup */
     }
     return truncate(text.replace(/[?#].*$/, ""), ATTRIBUTE_LIMIT);
+  }
+
+  function sanitizeUrlList(value, allowPropertyNames = false) {
+    const tokens = collapse(value).split(/\s+/).filter(Boolean);
+    const sanitized = tokens.map((token) => {
+      const isUrl =
+        /^(?:[a-z][a-z\d+.-]*:|\/\/|\/|\.\.?(?:\/|$)|[?#])/i.test(token) ||
+        /[?#]/.test(token);
+      return allowPropertyNames && !isUrl
+        ? truncate(token, ATTRIBUTE_LIMIT)
+        : stripUrlDetails(token);
+    });
+    return truncate(sanitized.join(" "), ATTRIBUTE_LIMIT);
+  }
+
+  function sanitizeUrlFunctions(value) {
+    return String(value).replace(/url\(\s*(['"]?)(.*?)\1\s*\)/gi, (_match, _quote, url) => {
+      return `url("${stripUrlDetails(url)}")`;
+    });
   }
 
   function safePageUrl(value) {
@@ -356,15 +417,13 @@
     let text = collapse(value);
     if (!text) return "";
     if (key === "backgroundImage" || /url\(/i.test(text)) {
-      text = text.replace(/url\(\s*(['"]?)(.*?)\1\s*\)/gi, (_match, _quote, url) => {
-        return `url("${stripUrlDetails(url)}")`;
-      });
+      text = sanitizeUrlFunctions(text);
     }
     return truncate(text, ATTRIBUTE_LIMIT);
   }
 
   function sanitizeHtmlTree(root) {
-    root.querySelectorAll("script, style, iframe, object, embed, link").forEach((node) => node.remove());
+    root.querySelectorAll("script, style, iframe, object, embed, link, meta").forEach((node) => node.remove());
     const nodes = root.nodeType === 1 ? [root, ...root.querySelectorAll("*")] : [...root.querySelectorAll("*")];
     for (const node of nodes) {
       const tag = node.tagName.toLowerCase();
@@ -374,39 +433,132 @@
         node.removeAttribute("selected");
       }
       for (const attr of [...node.attributes]) {
-        const name = attr.name.toLowerCase();
+        const qualifiedName = attr.name.toLowerCase();
+        const name = (attr.localName || attr.name).toLowerCase();
         if (
           /^on/i.test(name) ||
           name === "srcdoc" ||
-          name === "srcset" ||
           name === "style" ||
-          SENSITIVE_ATTRIBUTE.test(name)
+          URL_CANDIDATE_ATTRIBUTES.has(name) ||
+          SENSITIVE_ATTRIBUTE.test(qualifiedName)
         ) {
           node.removeAttribute(attr.name);
           continue;
         }
-        if (URL_ATTRIBUTES.has(name) || name.endsWith(":href")) {
-          node.setAttribute(attr.name, stripUrlDetails(attr.value));
+        if (URL_LIST_ATTRIBUTES.has(name)) {
+          attr.value = sanitizeUrlList(attr.value);
           continue;
         }
-        node.setAttribute(attr.name, truncate(attr.value, ATTRIBUTE_LIMIT));
+        if (name === "itemprop") {
+          attr.value = sanitizeUrlList(attr.value, true);
+          continue;
+        }
+        if (URL_ATTRIBUTES.has(name) || (tag === "object" && name === "data")) {
+          attr.value = stripUrlDetails(attr.value);
+          continue;
+        }
+        if (URL_FUNCTION_ATTRIBUTES.has(name)) {
+          if (attr.value.includes("\\")) {
+            node.removeAttribute(attr.name);
+          } else if (/url\(/i.test(attr.value)) {
+            attr.value = truncate(sanitizeUrlFunctions(attr.value), ATTRIBUTE_LIMIT);
+          } else {
+            attr.value = truncate(attr.value, ATTRIBUTE_LIMIT);
+          }
+          continue;
+        }
+        if (/url\(/i.test(attr.value)) {
+          attr.value = truncate(sanitizeUrlFunctions(attr.value), ATTRIBUTE_LIMIT);
+          continue;
+        }
+        attr.value = truncate(attr.value, ATTRIBUTE_LIMIT);
       }
     }
     return root;
   }
 
+  function compactSerializedHtml(root) {
+    return root.outerHTML.replace(/\s+/g, " ").trim();
+  }
+
+  function trimAttributesToFit(treeRoot, element, max) {
+    if (compactSerializedHtml(treeRoot).length <= max) return true;
+    const attributes = [...element.attributes].sort((a, b) => {
+      const aPriority = HTML_CONTEXT_ATTRIBUTES.has((a.localName || a.name).toLowerCase()) ? 1 : 0;
+      const bPriority = HTML_CONTEXT_ATTRIBUTES.has((b.localName || b.name).toLowerCase()) ? 1 : 0;
+      return aPriority - bPriority;
+    });
+    for (const attr of attributes) {
+      element.removeAttribute(attr.name);
+      if (compactSerializedHtml(treeRoot).length <= max) return true;
+    }
+    return compactSerializedHtml(treeRoot).length <= max;
+  }
+
+  function appendHtmlPrefix(sourceParent, targetParent, treeRoot, max) {
+    for (const sourceNode of sourceParent.childNodes) {
+      if (sourceNode.nodeType === Node.TEXT_NODE) {
+        const text = document.createTextNode(sourceNode.data);
+        targetParent.appendChild(text);
+        if (compactSerializedHtml(treeRoot).length <= max) continue;
+
+        let low = 0;
+        let high = sourceNode.data.length;
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2);
+          text.data = sourceNode.data.slice(0, middle);
+          if (compactSerializedHtml(treeRoot).length <= max) low = middle;
+          else high = middle - 1;
+        }
+        text.data = sourceNode.data.slice(0, low);
+        if (low < sourceNode.data.length) {
+          let prefixLength = low;
+          text.data = `${sourceNode.data.slice(0, prefixLength)}…`;
+          while (compactSerializedHtml(treeRoot).length > max && prefixLength > 0) {
+            prefixLength -= 1;
+            text.data = `${sourceNode.data.slice(0, prefixLength)}…`;
+          }
+          if (compactSerializedHtml(treeRoot).length > max) text.data = "";
+        }
+        if (!text.data) text.remove();
+        return false;
+      }
+
+      if (sourceNode.nodeType !== Node.ELEMENT_NODE) continue;
+      const element = sourceNode.cloneNode(false);
+      targetParent.appendChild(element);
+      if (!trimAttributesToFit(treeRoot, element, max)) {
+        element.remove();
+        return false;
+      }
+      if (!appendHtmlPrefix(sourceNode, element, treeRoot, max)) return false;
+    }
+    return true;
+  }
+
+  function serializeSanitizedHtml(root, max) {
+    const bounded = root.cloneNode(false);
+    if (!trimAttributesToFit(bounded, bounded, max)) return "";
+    appendHtmlPrefix(root, bounded, bounded, max);
+    return compactSerializedHtml(bounded);
+  }
+
   function serializeHtml(el, max) {
     const clone = el.cloneNode(true);
     sanitizeHtmlTree(clone);
-    return truncate(clone.outerHTML.replace(/\s+/g, " ").trim(), max);
+    return serializeSanitizedHtml(clone, max);
   }
 
   function sanitizeStoredHtml(html) {
     if (!html) return "";
     const template = document.createElement("template");
     template.innerHTML = String(html);
-    sanitizeHtmlTree(template.content);
-    return truncate(template.innerHTML.replace(/\s+/g, " ").trim(), HTML_LIMIT);
+    const target = template.content.firstElementChild;
+    if (!target || ["script", "style", "link", "meta"].includes(target.tagName.toLowerCase())) {
+      return "";
+    }
+    sanitizeHtmlTree(target);
+    return serializeSanitizedHtml(target, HTML_LIMIT);
   }
 
   function nearbyLabel(el) {

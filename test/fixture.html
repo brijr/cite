@@ -72,8 +72,52 @@
       <article>Second card</article>
     </section>
 
+    <section id="url-attributes-target">
+      <blockquote cite="/source?token=fixture-cite-secret#private">Quoted context</blockquote>
+      <a
+        href="/reference?token=fixture-href-secret#private"
+        ping="/audit-one?token=fixture-ping-one-secret#private https://example.test/audit-two?token=fixture-ping-two-secret#private"
+        attributionsrc="/attribution-one?token=fixture-attribution-one-secret#private /attribution-two?token=fixture-attribution-two-secret#private"
+      >
+        Reference
+      </a>
+      <div
+        itemscope
+        itemid="/records/42?token=fixture-itemid-secret#private"
+        itemtype="https://schema.org/Thing?token=fixture-itemtype-secret#private"
+      >
+        <span itemprop="name https://example.test/property?token=fixture-itemprop-secret#private">Record</span>
+      </div>
+      <svg viewBox="0 0 10 10" aria-label="URL function fixture">
+        <use href="/sprite.svg?token=fixture-svg-href-secret#private"></use>
+        <rect width="10" height="10" fill="url('/paint.svg?token=fixture-svg-fill-secret#private')"></rect>
+        <rect width="5" height="5" fill="u\72l('/escaped.svg?token=fixture-svg-escaped-name-secret#private')"></rect>
+        <rect width="5" height="5" fill="url(/escaped.svg\3f token=fixture-svg-escaped-argument-secret\23 private)"></rect>
+      </svg>
+      <img
+        alt="Candidate list fixture"
+        src="/image.png?token=fixture-image-secret#private"
+        srcset="/small.png?token=fixture-srcset-secret 1x, /large.png?token=fixture-srcset-secret 2x"
+        usemap="#fixture-usemap-secret"
+      />
+    </section>
+
+    <section id="oversized-html-target">
+      <strong>Visible target context survives bounded serialization.</strong>
+    </section>
+
+    <iframe
+      id="iframe-target"
+      title="Embedded target"
+      src="about:blank?token=fixture-iframe-secret#private"
+    ></iframe>
+
     <script>
       const fixtureParams = new URLSearchParams(location.search);
+      const oversizedTarget = document.querySelector("#oversized-html-target");
+      for (let index = 0; index < 9; index += 1) {
+        oversizedTarget.setAttribute(`data-context-${index}`, String(index).repeat(220));
+      }
       if (fixtureParams.has("legacy")) {
         const key = `cite:fixture:${location.origin}${location.pathname}`;
         localStorage.setItem(key, JSON.stringify([{
