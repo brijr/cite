@@ -59,6 +59,7 @@
 
     <section class="flex-target" aria-label="Flexible toolbar">
       <button class="flex-item" type="button" value="fixture-button-secret">Previous</button>
+      <input type="button" role="switch" value="Visible input action" />
       <button
         type="button"
         aria-label="A deliberately long button label used to verify that all labeled text is capped before it reaches persistent storage or a copied feedback bundle, even when the source attribute continues far beyond a normal interface label length"
@@ -72,7 +73,17 @@
       <article>Second card</article>
     </section>
 
-    <section id="url-attributes-target">
+    <section
+      id="url-attributes-target"
+      data-csrf="fixture-csrf-secret"
+      data-xsrf="fixture-xsrf-secret"
+      data-csrftoken="fixture-csrftoken-secret"
+      data-csrfmiddlewaretoken="fixture-csrf-middleware-secret"
+      data-requestverificationtoken="fixture-request-verification-secret"
+      data-antiforgery="fixture-antiforgery-secret"
+      data-csrfish="ordinary-control"
+      base="ordinary?keep#fragment"
+    >
       <blockquote cite="/source?token=fixture-cite-secret#private">Quoted context</blockquote>
       <a
         href="/reference?token=fixture-href-secret#private"
@@ -88,7 +99,11 @@
       >
         <span itemprop="name https://example.test/property?token=fixture-itemprop-secret#private">Record</span>
       </div>
-      <svg viewBox="0 0 10 10" aria-label="URL function fixture">
+      <svg
+        viewBox="0 0 10 10"
+        aria-label="URL function fixture"
+        xml:base="https://example.test/assets/?token=fixture-xml-base-secret#private"
+      >
         <use href="/sprite.svg?token=fixture-svg-href-secret#private"></use>
         <rect width="10" height="10" fill="url('/paint.svg?token=fixture-svg-fill-secret#private')"></rect>
         <rect width="5" height="5" fill="u\72l('/escaped.svg?token=fixture-svg-escaped-name-secret#private')"></rect>
@@ -129,7 +144,7 @@
             name: "input#legacy",
             id: "legacy",
             classes: [],
-            role: "password",
+            role: "button",
             text: "fixture-legacy-text-secret",
             selector: "#account-password",
             trail: "Account details → input#legacy",
@@ -137,7 +152,7 @@
             page: { x: 410, y: 920 },
             viewport: { width: 1280, height: 720 },
             styles: { display: "inline-block", backgroundImage: "url(data:image/svg+xml,fixture-style-secret)" },
-            html: "<input id=\"legacy\" value=\"fixture-legacy-html-secret\" data-auth-token=\"fixture-legacy-attribute-secret\">",
+            html: "<input id=\"legacy\" type=\"password\" role=\"button\" value=\"fixture-legacy-html-secret\" data-auth-token=\"fixture-legacy-attribute-secret\">",
             nearby: {
               parent: "form",
               previous: "input \"fixture-legacy-previous-secret\"",
@@ -145,6 +160,38 @@
               parentHtml: "fixture-legacy-parent-secret"
             },
             url: `${location.origin}${location.pathname}?token=fixture-legacy-url-secret#private`,
+            path: location.pathname,
+            title: document.title
+          }
+        }]));
+      }
+      if (fixtureParams.has("v2")) {
+        const key = `cite:fixture:${location.origin}${location.pathname}`;
+        localStorage.setItem(key, JSON.stringify([{
+          id: "v2-fixture",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          captureVersion: 2,
+          request: "Keep safe migrated context.",
+          target: {
+            tag: "button",
+            name: "button#v2",
+            id: "v2",
+            classes: [],
+            role: "button",
+            text: "fixture-v2-button-value-secret",
+            selector: "#missing-v2-target",
+            trail: "Toolbar → button#v2",
+            rect: { x: 10, y: 20, width: 200, height: 40 },
+            page: { x: 10, y: 20 },
+            viewport: { width: 1280, height: 720 },
+            styles: { display: "inline-block" },
+            html: "<button id=\"v2\" value=\"fixture-v2-button-value-secret\">Continue</button>",
+            nearby: {
+              parent: "div.toolbar",
+              previous: "div.status \"Safe sibling context\"",
+              next: "input \"fixture-v2-nearby-secret\""
+            },
+            url: `${location.origin}${location.pathname}`,
             path: location.pathname,
             title: document.title
           }

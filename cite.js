@@ -17,7 +17,7 @@
   const KEY_INSPECT = IS_MAC ? "⌘⇧ F" : "Ctrl+Shift+F";
   const KEY_COPY = "C";
   const KEY_SAVE = IS_MAC ? "⌘↵" : "Ctrl+Enter";
-  const CAPTURE_VERSION = 2;
+  const CAPTURE_VERSION = 3;
   const TEXT_LIMIT = 160;
   const TITLE_LIMIT = 120;
   const HTML_LIMIT = 1200;
@@ -139,7 +139,8 @@
     "gridTemplateColumns",
     "gridTemplateRows",
   ];
-  const SENSITIVE_ATTRIBUTE = /(?:^|[-_:])(?:auth(?:orization)?|cookie|credential|nonce|pass(?:word|wd)?|secret|session|token|api[-_]?key)(?:$|[-_:])/i;
+  const SENSITIVE_ATTRIBUTE = /(?:^|[-_:])(?:anti[-_]?forgery(?:token)?|auth(?:orization)?|cookie|credential|csrf(?:middlewaretoken|token)?|nonce|pass(?:word|wd)?|requestverificationtoken|secret|session|token|xsrf(?:token)?|api[-_]?key)(?:$|[-_:])/i;
+  const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
   const URL_ATTRIBUTES = new Set([
     "action",
     "background",
@@ -267,6 +268,27 @@
 
   function safePath(value) {
     return truncate(collapse(value || location.pathname).replace(/[?#].*$/, ""), 300);
+  }
+
+  function textFromSanitizedHtml(html) {
+    if (!html) return "";
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const element = template.content.firstElementChild;
+    if (!element) return "";
+    const label =
+      element.getAttribute("aria-label") ||
+      element.getAttribute("alt") ||
+      element.getAttribute("title") ||
+      element.getAttribute("placeholder");
+    return safeText(label || element.textContent);
+  }
+
+  function safeNearbyText(value, { drop = false, scrubFormValue = false } = {}) {
+    if (drop) return "";
+    const text = safeText(value, 240);
+    if (!scrubFormValue) return text;
+    return /^(?:button|input|option|select|textarea)(?:[#.\s]|$)/i.test(text) ? "" : text;
   }
 
   function isOurEvent(event) {
@@ -453,7 +475,10 @@
           attr.value = sanitizeUrlList(attr.value, true);
           continue;
         }
-        if (URL_ATTRIBUTES.has(name) || (tag === "object" && name === "data")) {
+        const isXmlBase =
+          qualifiedName === "xml:base" &&
+          (attr.namespaceURI === null || attr.namespaceURI === XML_NAMESPACE);
+        if (URL_ATTRIBUTES.has(name) || (tag === "object" && name === "data") || isXmlBase) {
           attr.value = stripUrlDetails(attr.value);
           continue;
         }
@@ -586,6 +611,7 @@
       id: el.id || "",
       classes: meaningfulClasses(el),
       role: el.getAttribute("role") || el.getAttribute("type") || "",
+      inputType: el.tagName.toLowerCase() === "input" ? el.getAttribute("type") || "" : "",
       text: visibleText(el),
       selector: uniqueSelector(el),
       trail: locationTrail(el),
@@ -721,11 +747,24 @@
     return normalized;
   }
 
-  function normalizeTarget(target, { dropNearbySiblings = false } = {}) {
+  function normalizeTarget(
+    target,
+    { dropLegacyValueText = false, dropLegacyNearby = false, scrubLegacyNearby = false } = {},
+  ) {
     if (!target || typeof target !== "object") return null;
     const tag = safeText(target.tag, 32).toLowerCase();
     const role = safeText(target.role, 64).toLowerCase();
-    const formValue = tag === "textarea" || tag === "select" || (tag === "input" && !["button", "reset", "submit"].includes(role));
+    const inputType = safeText(target.inputType, 32).toLowerCase();
+    const html = sanitizeStoredHtml(target.html);
+    const formValue =
+      tag === "textarea" ||
+      tag === "select" ||
+      (dropLegacyValueText && ["button", "input", "option"].includes(tag)) ||
+      (tag === "input" && !["button", "reset", "submit"].includes(inputType));
+    const recoveredLegacyLabel =
+      dropLegacyValueText && ["button", "option"].includes(tag)
+        ? textFromSanitizedHtml(html)
+        : "";
     const nearby = target.nearby && typeof target.nearby === "object" ? target.nearby : {};
     const rect = target.rect && typeof target.rect === "object" ? target.rect : {};
     const page = target.page && typeof target.page === "object" ? target.page : null;
@@ -738,7 +777,8 @@
         ? target.classes.slice(0, 3).map((name) => safeText(name, 120))
         : [],
       role,
-      text: formValue ? "" : safeText(target.text),
+      inputType: tag === "input" ? inputType : "",
+      text: formValue ? recoveredLegacyLabel : safeText(target.text),
       selector: String(target.selector || "").trim(),
       trail: safeText(target.trail, 240),
       rect: {
@@ -758,11 +798,17 @@
         height: safeNumber(viewport.height),
       },
       styles: normalizeStyles(target.styles),
-      html: sanitizeStoredHtml(target.html),
+      html,
       nearby: {
         parent: safeText(nearby.parent, 120),
-        previous: dropNearbySiblings ? "" : safeText(nearby.previous, 240),
-        next: dropNearbySiblings ? "" : safeText(nearby.next, 240),
+        previous: safeNearbyText(nearby.previous, {
+          drop: dropLegacyNearby,
+          scrubFormValue: scrubLegacyNearby,
+        }),
+        next: safeNearbyText(nearby.next, {
+          drop: dropLegacyNearby,
+          scrubFormValue: scrubLegacyNearby,
+        }),
       },
       url: safePageUrl(target.url),
       path: safePath(target.path),
@@ -772,8 +818,13 @@
 
   function normalizeAnnotation(annotation, { migrateLegacy = false } = {}) {
     if (!annotation || typeof annotation !== "object") return null;
+    const version = Number(annotation.captureVersion);
+    const isLegacy = migrateLegacy && version !== CAPTURE_VERSION;
+    const isPreV2 = isLegacy && (!Number.isFinite(version) || version < 2);
     const target = normalizeTarget(annotation.target, {
-      dropNearbySiblings: migrateLegacy && Number(annotation.captureVersion) !== CAPTURE_VERSION,
+      dropLegacyValueText: isLegacy,
+      dropLegacyNearby: isPreV2,
+      scrubLegacyNearby: isLegacy,
     });
     const request = collapse(annotation.request);
     if (!target || !request) return null;
