@@ -24,8 +24,8 @@
         <h1>Click anything. Tell the agent what to change.</h1>
         <p class="intro">
           One script on any website. Click an element, describe the change, and
-          copy a bundle for Claude, Cursor, or Codex. Selector, HTML, computed
-          CSS, nearby DOM, and the request.
+          copy a compact bundle for Claude, Cursor, or Codex. Selector, HTML,
+          relevant CSS, nearby elements, and the request.
         </p>
         <p class="intro muted">No accounts. No backend. No build step.</p>
 
@@ -42,7 +42,7 @@
 Cite: https://cite.brijr.dev/cite.js
 Docs: https://cite.brijr.dev
 
-One script. It overlays the page so you can click an element, describe the change, and copy a bundle (selector, HTML, computed CSS, nearby DOM, request) into a coding agent.
+One script. It overlays the page so you can click an element, describe the change, and copy a compact bundle (selector, HTML, relevant CSS, nearby elements, request) into a coding agent.
 
 Astro: in the root layout, at the end of body, render this only when import.meta.env.DEV is true. Use is:inline so Astro does not bundle it.
 
@@ -81,8 +81,8 @@ Do not add a package, backend, or auth.</code></pre>
 
         <h2>Copied with each annotation</h2>
         <p>
-          Selector, visible text, HTML, computed CSS, nearby DOM, geometry, and
-          the page URL.
+          Selector, capped visible text, sanitized HTML, relevant CSS, nearby
+          elements, geometry, and a query-free page URL.
         </p>
 
         <h2>Try it</h2>

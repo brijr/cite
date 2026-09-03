@@ -9,7 +9,7 @@ A change request attached to one Target on a page.
 _Avoid_: Comment, note, ticket, feedback, pin
 
 **Target**:
-The captured identity and context of a DOM element: selector, text, HTML, computed CSS, geometry, and URL.
+The sanitized identity and rendered context of a DOM element: selector, capped text, HTML, relevant CSS, geometry, nearby elements, and a query-free URL.
 _Avoid_: Element snapshot, payload, node
 
 **Bundle**:

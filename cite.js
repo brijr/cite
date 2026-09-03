@@ -17,6 +17,11 @@
   const KEY_INSPECT = IS_MAC ? "⌘⇧ F" : "Ctrl+Shift+F";
   const KEY_COPY = "C";
   const KEY_SAVE = IS_MAC ? "⌘↵" : "Ctrl+Enter";
+  const CAPTURE_VERSION = 4;
+  const TEXT_LIMIT = 160;
+  const TITLE_LIMIT = 120;
+  const HTML_LIMIT = 1200;
+  const ATTRIBUTE_LIMIT = 200;
   const TARGET_SEL = [
     "a[href]",
     "button",
@@ -83,6 +88,110 @@
     "zIndex",
     "transform",
   ];
+  const BASE_STYLE_KEYS = [
+    "display",
+    "position",
+    "boxSizing",
+    "width",
+    "height",
+    "margin",
+    "padding",
+    "fontFamily",
+    "fontSize",
+    "fontWeight",
+    "lineHeight",
+    "textAlign",
+    "color",
+    "backgroundColor",
+    "border",
+    "borderRadius",
+  ];
+  const CONDITIONAL_STYLE_KEYS = [
+    "minWidth",
+    "minHeight",
+    "maxWidth",
+    "maxHeight",
+    "fontStyle",
+    "letterSpacing",
+    "textDecoration",
+    "textTransform",
+    "backgroundImage",
+    "boxShadow",
+    "outline",
+    "opacity",
+    "overflow",
+    "gap",
+    "flex",
+    "zIndex",
+    "transform",
+  ];
+  const FLEX_STYLE_KEYS = [
+    "gap",
+    "flexDirection",
+    "flexWrap",
+    "alignItems",
+    "justifyContent",
+  ];
+  const GRID_STYLE_KEYS = [
+    "gap",
+    "alignItems",
+    "justifyContent",
+    "gridTemplateColumns",
+    "gridTemplateRows",
+  ];
+  const SENSITIVE_ATTRIBUTE = /(?:^|[-_:])(?:anti[-_]?forgery(?:token)?|auth(?:orization)?|cookie|credential|csrf(?:middlewaretoken|token)?|nonce|pass(?:word|wd)?|requestverificationtoken|secret|session|token|xsrf(?:token)?|api[-_]?key)(?:$|[-_:])/i;
+  const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
+  const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
+  const FORM_VALUE_TAGS = new Set(["button", "input", "option", "select", "textarea"]);
+  const SERIALIZED_FORM_STRUCTURE_TAGS = new Set(["OPTION", "OPTGROUP"]);
+  const URL_ATTRIBUTES = new Set([
+    "action",
+    "about",
+    "background",
+    "cite",
+    "classid",
+    "codebase",
+    "dynsrc",
+    "formaction",
+    "href",
+    "itemid",
+    "longdesc",
+    "lowsrc",
+    "manifest",
+    "poster",
+    "profile",
+    "resource",
+    "src",
+    "usemap",
+    "vocab",
+  ]);
+  const URL_LIST_ATTRIBUTES = new Set(["archive", "attributionsrc", "itemtype", "ping"]);
+  const URL_CANDIDATE_ATTRIBUTES = new Set(["imagesrcset", "srcset"]);
+  const URL_NAMED_ATTRIBUTE = /(?:^|[-_:])(?:endpoint|href|resource|src|url|uri)(?:$|[-_:])/i;
+  const RDFa_URL_LIST_ATTRIBUTES = new Set(["datatype", "prefix", "property", "rel", "rev", "typeof"]);
+  const URL_FUNCTION_ATTRIBUTES = new Set([
+    "clip-path",
+    "color-profile",
+    "cursor",
+    "fill",
+    "filter",
+    "marker",
+    "marker-end",
+    "marker-mid",
+    "marker-start",
+    "mask",
+    "stroke",
+  ]);
+  const HTML_CONTEXT_ATTRIBUTES = new Set([
+    "aria-label",
+    "class",
+    "data-test",
+    "data-testid",
+    "id",
+    "name",
+    "role",
+    "type",
+  ]);
 
   const cssEscape =
     (window.CSS && CSS.escape) ||
@@ -111,6 +220,145 @@
     return `${text.slice(0, max - 1)}…`;
   }
 
+  function safeText(value, max = TEXT_LIMIT) {
+    return truncate(collapse(value), max);
+  }
+
+  function stripUrlDetails(value) {
+    const text = collapse(value);
+    if (!text) return "";
+    if (/^(?:blob|data|javascript):/i.test(text)) return "[redacted]";
+    try {
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(text)) {
+        const parsed = new URL(text, location.href);
+        parsed.username = "";
+        parsed.password = "";
+        parsed.search = "";
+        parsed.hash = "";
+        return truncate(parsed.href, ATTRIBUTE_LIMIT);
+      }
+    } catch (_) {
+      /* fall through to a conservative string cleanup */
+    }
+    return truncate(text.replace(/[?#].*$/, ""), ATTRIBUTE_LIMIT);
+  }
+
+  function sanitizeUrlList(value, allowPropertyNames = false) {
+    const tokens = collapse(value).split(/\s+/).filter(Boolean);
+    const sanitized = tokens.map((token) => {
+      const isUrl =
+        /^(?:[a-z][a-z\d+.-]*:|\/\/|\/|\.\.?(?:\/|$)|[?#])/i.test(token) ||
+        /[?#]/.test(token);
+      return allowPropertyNames && !isUrl
+        ? truncate(token, ATTRIBUTE_LIMIT)
+        : stripUrlDetails(token);
+    });
+    return truncate(sanitized.join(" "), ATTRIBUTE_LIMIT);
+  }
+
+  function sanitizeUrlFunctions(value) {
+    return String(value).replace(/url\(\s*(['"]?)(.*?)\1\s*\)/gi, (_match, _quote, url) => {
+      return `url("${stripUrlDetails(url)}")`;
+    });
+  }
+
+  function safePageUrl(value) {
+    try {
+      const parsed = new URL(value || location.href, location.href);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return truncate(`${parsed.origin}${parsed.pathname}`, 400);
+      }
+      return truncate(parsed.pathname || parsed.protocol, 400);
+    } catch (_) {
+      return truncate(collapse(value).replace(/[?#].*$/, ""), 400);
+    }
+  }
+
+  function safePath(value) {
+    return truncate(collapse(value || location.pathname).replace(/[?#].*$/, ""), 300);
+  }
+
+  function textFromSanitizedHtml(html) {
+    if (!html) return "";
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const element = template.content.firstElementChild;
+    if (!element) return "";
+    const label =
+      element.getAttribute("aria-label") ||
+      element.getAttribute("alt") ||
+      element.getAttribute("title") ||
+      element.getAttribute("placeholder");
+    return safeText(label || element.textContent);
+  }
+
+  function safeNearbyText(value, { drop = false, scrubFormValue = false } = {}) {
+    if (drop) return "";
+    const text = safeText(value, 240);
+    if (!scrubFormValue) return text;
+    return /^(?:button|input|option|select|textarea)(?:[#.\s]|$)/i.test(text) ? "" : text;
+  }
+
+  function hasBlockingRenderState(el) {
+    let node = el;
+    while (node && node instanceof Element) {
+      const style = getComputedStyle(node);
+      if (
+        style.display === "none" ||
+        Number(style.opacity) === 0 ||
+        style.contentVisibility === "hidden"
+      ) {
+        return true;
+      }
+      node = node.parentElement;
+    }
+    return false;
+  }
+
+  function hasVisibleBox(el) {
+    if (hasBlockingRenderState(el)) return false;
+    const visibility = getComputedStyle(el).visibility;
+    if (visibility === "hidden" || visibility === "collapse") return false;
+    return [...el.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0);
+  }
+
+  function isRenderedTextNode(textNode) {
+    if (!collapse(textNode && textNode.nodeValue)) return false;
+    const parent = textNode.parentElement;
+    if (!parent || SKIP_TAGS.has(parent.tagName) || hasBlockingRenderState(parent)) return false;
+    const visibility = getComputedStyle(parent).visibility;
+    if (visibility === "hidden" || visibility === "collapse") return false;
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    return [...range.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0);
+  }
+
+  function renderedTextFromRanges(el) {
+    const parts = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+    while (textNode) {
+      if (isRenderedTextNode(textNode)) parts.push(textNode.nodeValue);
+      textNode = walker.nextNode();
+    }
+    return safeText(parts.join(" "));
+  }
+
+  function visibleRenderedText(el) {
+    if (hasVisibleBox(el) && typeof el.innerText === "string") {
+      return safeText(el.innerText);
+    }
+    return renderedTextFromRanges(el);
+  }
+
+  function isRenderedElement(el) {
+    if (!(el instanceof Element) || SKIP_TAGS.has(el.tagName) || hasBlockingRenderState(el)) {
+      return false;
+    }
+    if (hasVisibleBox(el) || visibleRenderedText(el)) return true;
+    return [...el.querySelectorAll("*")].some(hasVisibleBox);
+  }
+
   function isOurEvent(event) {
     const path = event.composedPath ? event.composedPath() : [];
     return path.some((node) => node && node.id === ROOT_ID);
@@ -122,10 +370,16 @@
       el.getAttribute("aria-label") ||
       el.getAttribute("alt") ||
       el.getAttribute("title") ||
-      el.getAttribute("placeholder") ||
-      el.value;
-    if (labeled) return collapse(labeled);
-    return truncate(collapse(el.innerText || el.textContent || ""), 160);
+      el.getAttribute("placeholder");
+    if (labeled) return safeText(labeled);
+
+    const tag = el.tagName.toLowerCase();
+    if (tag === "input") {
+      const type = (el.getAttribute("type") || "text").toLowerCase();
+      return ["button", "reset", "submit"].includes(type) ? safeText(el.value) : "";
+    }
+    if (tag === "select" || tag === "textarea") return "";
+    return visibleRenderedText(el);
   }
 
   function meaningfulClasses(el) {
@@ -204,9 +458,11 @@
   function headingNear(el) {
     let node = el;
     while (node && node !== document.body) {
-      const heading = node.querySelector && node.querySelector("h1, h2, h3");
+      const heading =
+        node.querySelectorAll &&
+        [...node.querySelectorAll("h1, h2, h3")].find(isRenderedElement);
       if (heading && heading !== el) {
-        const text = collapse(heading.textContent || "");
+        const text = visibleText(heading);
         if (text) return truncate(text, 48);
       }
       const landmark =
@@ -223,7 +479,7 @@
     let node = el;
     while (node && node !== document.body && crumbs.length < 4) {
       const heading = node.matches && node.matches("h1, h2, h3, h4")
-        ? collapse(node.textContent || "")
+        ? visibleText(node)
         : "";
       const label =
         heading ||
@@ -244,34 +500,240 @@
     const computed = getComputedStyle(el);
     const styles = {};
     for (const key of STYLE_KEYS) {
-      styles[key] = computed[key];
+      styles[key] = sanitizeStyleValue(key, computed[key]);
     }
     return styles;
   }
 
-  function serializeHtml(el, max) {
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll("script, style, iframe, object, embed, link").forEach((node) => node.remove());
-    const walker = document.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT);
-    const nodes = [clone];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
+  function sanitizeStyleValue(key, value) {
+    let text = collapse(value);
+    if (!text) return "";
+    if (key === "backgroundImage" || /url\(/i.test(text)) {
+      text = sanitizeUrlFunctions(text);
+    }
+    return truncate(text, ATTRIBUTE_LIMIT);
+  }
+
+  function hasHiddenInlineStyle(node, includeVisibility = true) {
+    const { display, visibility, opacity, contentVisibility } = node.style;
+    return (
+      display === "none" ||
+      (includeVisibility && (visibility === "hidden" || visibility === "collapse")) ||
+      (opacity !== "" && Number(opacity) === 0) ||
+      contentVisibility === "hidden"
+    );
+  }
+
+  function sanitizeHtmlTree(root, { renderedPruned = false } = {}) {
+    root.querySelectorAll("script, style, iframe, object, embed, link, meta").forEach((node) => node.remove());
+    if (root.hasAttribute("hidden") || hasHiddenInlineStyle(root, !renderedPruned)) root.replaceChildren();
+    root.querySelectorAll("[hidden], [style]").forEach((node) => {
+      if (node.hasAttribute("hidden") || hasHiddenInlineStyle(node, !renderedPruned)) node.remove();
+    });
+    const nodes = root.nodeType === 1 ? [root, ...root.querySelectorAll("*")] : [...root.querySelectorAll("*")];
     for (const node of nodes) {
+      const tag = node.tagName.toLowerCase();
+      if (tag === "textarea") node.textContent = "";
+      if (FORM_VALUE_TAGS.has(tag) || tag.includes("-")) {
+        node.removeAttribute("value");
+        node.removeAttribute("selected");
+      }
       for (const attr of [...node.attributes]) {
-        if (/^on/i.test(attr.name) || attr.name === "srcdoc") node.removeAttribute(attr.name);
+        const qualifiedName = attr.name.toLowerCase();
+        const name = (attr.localName || attr.name).toLowerCase();
+        if (
+          /^on/i.test(name) ||
+          name === "srcdoc" ||
+          name === "style" ||
+          URL_CANDIDATE_ATTRIBUTES.has(name) ||
+          SENSITIVE_ATTRIBUTE.test(qualifiedName)
+        ) {
+          node.removeAttribute(attr.name);
+          continue;
+        }
+        if (URL_LIST_ATTRIBUTES.has(name)) {
+          attr.value = sanitizeUrlList(attr.value);
+          continue;
+        }
+        if (name === "itemprop" || RDFa_URL_LIST_ATTRIBUTES.has(name)) {
+          attr.value = sanitizeUrlList(attr.value, true);
+          continue;
+        }
+        const isXmlBase =
+          qualifiedName === "xml:base" &&
+          (attr.namespaceURI === null || attr.namespaceURI === XML_NAMESPACE);
+        const isXmlnsUrl =
+          qualifiedName === "xmlns" ||
+          qualifiedName.startsWith("xmlns:") ||
+          attr.namespaceURI === XMLNS_NAMESPACE;
+        if (
+          URL_ATTRIBUTES.has(name) ||
+          URL_NAMED_ATTRIBUTE.test(qualifiedName) ||
+          (tag === "object" && name === "data") ||
+          isXmlBase ||
+          isXmlnsUrl
+        ) {
+          attr.value = stripUrlDetails(attr.value);
+          continue;
+        }
+        if (URL_FUNCTION_ATTRIBUTES.has(name)) {
+          if (attr.value.includes("\\")) {
+            node.removeAttribute(attr.name);
+          } else if (/url\(/i.test(attr.value)) {
+            attr.value = truncate(sanitizeUrlFunctions(attr.value), ATTRIBUTE_LIMIT);
+          } else {
+            attr.value = truncate(attr.value, ATTRIBUTE_LIMIT);
+          }
+          continue;
+        }
+        if (/url\(/i.test(attr.value)) {
+          attr.value = truncate(sanitizeUrlFunctions(attr.value), ATTRIBUTE_LIMIT);
+          continue;
+        }
+        attr.value = truncate(attr.value, ATTRIBUTE_LIMIT);
       }
     }
-    return truncate(clone.outerHTML.replace(/\s+/g, " ").trim(), max);
+    return root;
+  }
+
+  function compactSerializedHtml(root) {
+    return root.outerHTML.replace(/\s+/g, " ").trim();
+  }
+
+  function trimAttributesToFit(treeRoot, element, max) {
+    if (compactSerializedHtml(treeRoot).length <= max) return true;
+    const attributes = [...element.attributes].sort((a, b) => {
+      const aPriority = HTML_CONTEXT_ATTRIBUTES.has((a.localName || a.name).toLowerCase()) ? 1 : 0;
+      const bPriority = HTML_CONTEXT_ATTRIBUTES.has((b.localName || b.name).toLowerCase()) ? 1 : 0;
+      return aPriority - bPriority;
+    });
+    for (const attr of attributes) {
+      element.removeAttribute(attr.name);
+      if (compactSerializedHtml(treeRoot).length <= max) return true;
+    }
+    return compactSerializedHtml(treeRoot).length <= max;
+  }
+
+  function appendHtmlPrefix(sourceParent, targetParent, treeRoot, max) {
+    for (const sourceNode of sourceParent.childNodes) {
+      if (sourceNode.nodeType === Node.TEXT_NODE) {
+        const text = document.createTextNode(sourceNode.data);
+        targetParent.appendChild(text);
+        if (compactSerializedHtml(treeRoot).length <= max) continue;
+
+        let low = 0;
+        let high = sourceNode.data.length;
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2);
+          text.data = sourceNode.data.slice(0, middle);
+          if (compactSerializedHtml(treeRoot).length <= max) low = middle;
+          else high = middle - 1;
+        }
+        text.data = sourceNode.data.slice(0, low);
+        if (low < sourceNode.data.length) {
+          let prefixLength = low;
+          text.data = `${sourceNode.data.slice(0, prefixLength)}…`;
+          while (compactSerializedHtml(treeRoot).length > max && prefixLength > 0) {
+            prefixLength -= 1;
+            text.data = `${sourceNode.data.slice(0, prefixLength)}…`;
+          }
+          if (compactSerializedHtml(treeRoot).length > max) text.data = "";
+        }
+        if (!text.data) text.remove();
+        return false;
+      }
+
+      if (sourceNode.nodeType !== Node.ELEMENT_NODE) continue;
+      const element = sourceNode.cloneNode(false);
+      targetParent.appendChild(element);
+      if (!trimAttributesToFit(treeRoot, element, max)) {
+        element.remove();
+        return false;
+      }
+      if (!appendHtmlPrefix(sourceNode, element, treeRoot, max)) return false;
+    }
+    return true;
+  }
+
+  function serializeSanitizedHtml(root, max) {
+    const bounded = root.cloneNode(false);
+    if (!trimAttributesToFit(bounded, bounded, max)) return "";
+    appendHtmlPrefix(root, bounded, bounded, max);
+    return compactSerializedHtml(bounded);
+  }
+
+  function cloneRenderedSubtree(el) {
+    const clone = el.cloneNode(true);
+    const sourceTextNodes = [];
+    const cloneTextNodes = [];
+    const sourceTextWalker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const cloneTextWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+    let sourceTextNode = sourceTextWalker.nextNode();
+    let cloneTextNode = cloneTextWalker.nextNode();
+    while (sourceTextNode && cloneTextNode) {
+      sourceTextNodes.push(sourceTextNode);
+      cloneTextNodes.push(cloneTextNode);
+      sourceTextNode = sourceTextWalker.nextNode();
+      cloneTextNode = cloneTextWalker.nextNode();
+    }
+    for (let index = sourceTextNodes.length - 1; index >= 0; index -= 1) {
+      const parent = sourceTextNodes[index].parentElement;
+      if (
+        !isRenderedTextNode(sourceTextNodes[index]) &&
+        !SERIALIZED_FORM_STRUCTURE_TAGS.has(parent && parent.tagName)
+      ) {
+        cloneTextNodes[index].remove();
+      }
+    }
+    const sourceNodes = [el, ...el.querySelectorAll("*")];
+    const cloneNodes = [clone, ...clone.querySelectorAll("*")];
+    for (let index = sourceNodes.length - 1; index > 0; index -= 1) {
+      const source = sourceNodes[index];
+      if (!isRenderedElement(source) && !SERIALIZED_FORM_STRUCTURE_TAGS.has(source.tagName)) {
+        cloneNodes[index].remove();
+      }
+    }
+    return clone;
+  }
+
+  function serializeHtml(el, max) {
+    const clone = cloneRenderedSubtree(el);
+    sanitizeHtmlTree(clone, { renderedPruned: true });
+    return serializeSanitizedHtml(clone, max);
+  }
+
+  function sanitizeStoredHtml(html) {
+    if (!html) return "";
+    const template = document.createElement("template");
+    template.innerHTML = String(html);
+    const target = template.content.firstElementChild;
+    if (!target || ["script", "style", "link", "meta"].includes(target.tagName.toLowerCase())) {
+      return "";
+    }
+    sanitizeHtmlTree(target);
+    return serializeSanitizedHtml(target, HTML_LIMIT);
+  }
+
+  function nearbyLabel(el) {
+    if (!isRenderedElement(el)) return "";
+    const text = visibleText(el);
+    return safeText(`${shortName(el)}${text ? ` ${JSON.stringify(text)}` : ""}`, 240);
+  }
+
+  function renderedSibling(el, direction) {
+    let sibling = el[direction];
+    while (sibling && !isRenderedElement(sibling)) sibling = sibling[direction];
+    return sibling;
   }
 
   function nearbyContext(el) {
     const parent = el.parentElement;
-    const prev = el.previousElementSibling;
-    const next = el.nextElementSibling;
+    const prev = renderedSibling(el, "previousElementSibling");
+    const next = renderedSibling(el, "nextElementSibling");
     return {
-      parent: parent ? shortName(parent) : "",
-      parentHtml: parent ? serializeHtml(parent, 900) : "",
-      previous: prev ? `${shortName(prev)} ${JSON.stringify(visibleText(prev))}` : "",
-      next: next ? `${shortName(next)} ${JSON.stringify(visibleText(next))}` : "",
+      parent: parent ? safeText(shortName(parent), 120) : "",
+      previous: nearbyLabel(prev),
+      next: nearbyLabel(next),
     };
   }
 
@@ -283,10 +745,10 @@
       id: el.id || "",
       classes: meaningfulClasses(el),
       role: el.getAttribute("role") || el.getAttribute("type") || "",
+      inputType: el.tagName.toLowerCase() === "input" ? el.getAttribute("type") || "" : "",
       text: visibleText(el),
       selector: uniqueSelector(el),
       trail: locationTrail(el),
-      href: el.getAttribute("href") || "",
       rect: {
         x: Math.round(rect.x),
         y: Math.round(rect.y),
@@ -298,18 +760,54 @@
         y: Math.round(rect.top + window.scrollY),
       },
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      scroll: { x: window.scrollX, y: window.scrollY },
       styles: computedStyles(el),
-      html: serializeHtml(el, 1800),
+      html: serializeHtml(el, HTML_LIMIT),
       nearby: nearbyContext(el),
-      url: location.href,
-      path: location.pathname,
-      title: document.title,
+      url: safePageUrl(location.href),
+      path: safePath(location.pathname),
+      title: safeText(document.title, TITLE_LIMIT),
     };
   }
 
+  function isNeutralStyle(key, value) {
+    if (!value) return true;
+    const exact = {
+      backgroundImage: "none",
+      boxShadow: "none",
+      flex: "0 1 auto",
+      fontStyle: "normal",
+      gap: "normal",
+      letterSpacing: "normal",
+      maxHeight: "none",
+      maxWidth: "none",
+      minHeight: "0px",
+      minWidth: "0px",
+      opacity: "1",
+      overflow: "visible",
+      textDecoration: "none",
+      textTransform: "none",
+      transform: "none",
+      zIndex: "auto",
+    };
+    if (key === "outline") return value === "none" || /\bnone\b/.test(value);
+    return exact[key] === value;
+  }
+
+  function relevantStyleEntries(styles) {
+    const keys = new Set(BASE_STYLE_KEYS);
+    for (const key of CONDITIONAL_STYLE_KEYS) {
+      if (!isNeutralStyle(key, styles[key])) keys.add(key);
+    }
+    const display = styles.display || "";
+    if (display.includes("flex")) FLEX_STYLE_KEYS.forEach((key) => keys.add(key));
+    if (display.includes("grid")) GRID_STYLE_KEYS.forEach((key) => keys.add(key));
+    return [...keys]
+      .filter((key) => styles[key])
+      .map((key) => [key, styles[key]]);
+  }
+
   function formatStyles(styles) {
-    return Object.entries(styles)
+    return relevantStyleEntries(styles)
       .map(([key, value]) => {
         const cssKey = key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
         return `${cssKey}: ${value};`;
@@ -338,30 +836,28 @@
       target.html,
       "```",
       "",
-      "### Computed CSS",
+      "### Relevant CSS",
       "```css",
       formatStyles(target.styles),
       "```",
       "",
-      "### Nearby DOM",
+      "### Nearby elements",
       target.nearby.parent ? `Parent: ${target.nearby.parent}` : null,
       target.nearby.previous ? `Previous: ${target.nearby.previous}` : null,
       target.nearby.next ? `Next: ${target.nearby.next}` : null,
-      target.nearby.parentHtml
-        ? ["", "```html", target.nearby.parentHtml, "```"].join("\n")
-        : null,
     ]
       .filter((line) => line !== null)
       .join("\n");
   }
 
   function formatBundle(annotations) {
-    if (!annotations.length) return "";
-    const first = annotations[0].target;
+    const safeAnnotations = annotations.map((annotation) => normalizeAnnotation(annotation)).filter(Boolean);
+    if (!safeAnnotations.length) return "";
+    const first = safeAnnotations[0].target;
     const header = [
       "The following are visual change requests captured from a web page.",
       "Apply each request to the matching element.",
-      "Treat the selector, HTML, and computed CSS as ground truth for what is on the page now.",
+      "The selector and rendered context describe the page at the captured viewport.",
       "",
       `Page: ${first.path}`,
       `Title: ${first.title}`,
@@ -369,7 +865,110 @@
       "",
       "",
     ];
-    return `${header.join("\n")}${annotations.map(formatAnnotation).join("\n\n")}\n`;
+    return `${header.join("\n")}${safeAnnotations.map(formatAnnotation).join("\n\n")}\n`;
+  }
+
+  function safeNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.round(number) : 0;
+  }
+
+  function normalizeStyles(styles) {
+    const normalized = {};
+    for (const key of STYLE_KEYS) {
+      if (styles && styles[key] != null) normalized[key] = sanitizeStyleValue(key, styles[key]);
+    }
+    return normalized;
+  }
+
+  function normalizeTarget(
+    target,
+    { dropLegacyValueText = false, dropLegacyNearby = false, scrubLegacyNearby = false } = {},
+  ) {
+    if (!target || typeof target !== "object") return null;
+    const tag = safeText(target.tag, 32).toLowerCase();
+    const role = safeText(target.role, 64).toLowerCase();
+    const inputType = safeText(target.inputType, 32).toLowerCase();
+    const html = sanitizeStoredHtml(target.html);
+    const formValue =
+      tag === "textarea" ||
+      tag === "select" ||
+      (dropLegacyValueText && ["button", "input", "option"].includes(tag)) ||
+      (tag === "input" && !["button", "reset", "submit"].includes(inputType));
+    const recoveredLegacyLabel =
+      dropLegacyValueText && ["button", "option"].includes(tag)
+        ? textFromSanitizedHtml(html)
+        : "";
+    const nearby = target.nearby && typeof target.nearby === "object" ? target.nearby : {};
+    const rect = target.rect && typeof target.rect === "object" ? target.rect : {};
+    const page = target.page && typeof target.page === "object" ? target.page : null;
+    const viewport = target.viewport && typeof target.viewport === "object" ? target.viewport : {};
+    return {
+      tag,
+      name: safeText(target.name || tag || "element", 240),
+      id: safeText(target.id, 160),
+      classes: Array.isArray(target.classes)
+        ? target.classes.slice(0, 3).map((name) => safeText(name, 120))
+        : [],
+      role,
+      inputType: tag === "input" ? inputType : "",
+      text: formValue ? recoveredLegacyLabel : safeText(target.text),
+      selector: String(target.selector || "").trim(),
+      trail: safeText(target.trail, 240),
+      rect: {
+        x: safeNumber(rect.x),
+        y: safeNumber(rect.y),
+        width: safeNumber(rect.width),
+        height: safeNumber(rect.height),
+      },
+      page: page
+        ? {
+            x: safeNumber(page.x),
+            y: safeNumber(page.y),
+          }
+        : null,
+      viewport: {
+        width: safeNumber(viewport.width),
+        height: safeNumber(viewport.height),
+      },
+      styles: normalizeStyles(target.styles),
+      html,
+      nearby: {
+        parent: safeText(nearby.parent, 120),
+        previous: safeNearbyText(nearby.previous, {
+          drop: dropLegacyNearby,
+          scrubFormValue: scrubLegacyNearby,
+        }),
+        next: safeNearbyText(nearby.next, {
+          drop: dropLegacyNearby,
+          scrubFormValue: scrubLegacyNearby,
+        }),
+      },
+      url: safePageUrl(target.url),
+      path: safePath(target.path),
+      title: safeText(target.title, TITLE_LIMIT),
+    };
+  }
+
+  function normalizeAnnotation(annotation, { migrateLegacy = false } = {}) {
+    if (!annotation || typeof annotation !== "object") return null;
+    const version = Number(annotation.captureVersion);
+    const isLegacy = migrateLegacy && version !== CAPTURE_VERSION;
+    const hasAmbiguousValueText = isLegacy && (!Number.isFinite(version) || version < 3);
+    const target = normalizeTarget(annotation.target, {
+      dropLegacyValueText: hasAmbiguousValueText,
+      dropLegacyNearby: isLegacy,
+      scrubLegacyNearby: isLegacy,
+    });
+    const request = collapse(annotation.request);
+    if (!target || !request) return null;
+    return {
+      id: safeText(annotation.id || uid(), 200),
+      createdAt: safeText(annotation.createdAt, 80),
+      captureVersion: CAPTURE_VERSION,
+      request,
+      target,
+    };
   }
 
   function loadAnnotations() {
@@ -377,7 +976,19 @@
       const raw = localStorage.getItem(storageKey);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      const normalized = parsed
+        .map((annotation) => normalizeAnnotation(annotation, { migrateLegacy: true }))
+        .filter(Boolean);
+      const next = JSON.stringify(normalized);
+      if (next !== raw) {
+        try {
+          localStorage.setItem(storageKey, next);
+        } catch (_) {
+          /* migration persistence is best-effort */
+        }
+      }
+      return normalized;
     } catch (_) {
       return [];
     }
@@ -1284,12 +1895,14 @@
     if (!state.draft) return;
     const request = collapse(els.textarea.value);
     if (!request) return;
-    state.annotations.push({
+    const annotation = normalizeAnnotation({
       id: uid(),
       createdAt: new Date().toISOString(),
       request,
       target: state.draft.target,
     });
+    if (!annotation) return;
+    state.annotations.push(annotation);
     persistAnnotations(state.annotations);
     state.draft = null;
     state.activeId = state.annotations[state.annotations.length - 1].id;
@@ -1326,13 +1939,8 @@
   }
 
   function isCiteable(el) {
-    if (!(el instanceof Element)) return false;
-    if (SKIP_TAGS.has(el.tagName)) return false;
+    if (!isRenderedElement(el)) return false;
     if (el === root || el.id === ROOT_ID || (el.closest && el.closest(`#${ROOT_ID}`))) return false;
-    const style = getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
-      return false;
-    }
     const rect = el.getBoundingClientRect();
     return rect.width >= 8 && rect.height >= 8;
   }
