@@ -7,6 +7,10 @@
   "preview_urls": false,
   "routes": [
     {
+      "pattern": "cite.wipds.com",
+      "custom_domain": true
+    },
+    {
       "pattern": "cite.brijr.dev",
       "custom_domain": true
     }

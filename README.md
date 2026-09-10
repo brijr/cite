@@ -10,14 +10,14 @@ No accounts. No backend. No build step.
 
 ```html
 <script
-  src="https://cite.brijr.dev/cite.js"
+  src="https://cite.wipds.com/cite.js"
   data-project="abc123"
 ></script>
 ```
 
 `data-project` only namespaces localStorage. It is optional.
 
-Site: [cite.brijr.dev](https://cite.brijr.dev). Cite is loaded on that page.
+Site: [cite.wipds.com](https://cite.wipds.com). Cite is loaded on that page.
 
 ## Astro (dev only)
 
@@ -34,7 +34,7 @@ const cite = import.meta.env.DEV;
     {cite && (
       <script
         is:inline
-        src="https://cite.brijr.dev/cite.js"
+        src="https://cite.wipds.com/cite.js"
         data-project="your-site"
       />
     )}
@@ -54,7 +54,7 @@ To load on `astro preview` as well (the tag ships, then no-ops off localhost):
 <script is:inline>
   if (["localhost", "127.0.0.1"].includes(location.hostname)) {
     const s = document.createElement("script");
-    s.src = "https://cite.brijr.dev/cite.js";
+    s.src = "https://cite.wipds.com/cite.js";
     s.dataset.project = "your-site";
     document.body.append(s);
   }
@@ -89,7 +89,7 @@ Or `python3 -m http.server 4173`. Open [http://localhost:4173/](http://localhost
 npm run deploy
 ```
 
-Serves `cite.js` at [cite.brijr.dev/cite.js](https://cite.brijr.dev/cite.js).
+Serves `cite.js` at [cite.wipds.com/cite.js](https://cite.wipds.com/cite.js).
 
 ## Use
 
@@ -115,7 +115,7 @@ The selector and rendered context describe the page at the captured viewport.
 
 Page: /
 Title: Cite — click anything, tell the agent what to change
-URL: https://cite.brijr.dev/
+URL: https://cite.wipds.com/
 
 ## Annotation 1
 

@@ -30,7 +30,7 @@
         <p class="intro muted">No accounts. No backend. No build step.</p>
 
         <div class="snippet">
-          <pre><code id="embed">&lt;script src="https://cite.brijr.dev/cite.js"&gt;&lt;/script&gt;</code></pre>
+          <pre><code id="embed">&lt;script src="https://cite.wipds.com/cite.js"&gt;&lt;/script&gt;</code></pre>
           <button type="button" class="copy" id="copy-embed">Copy</button>
         </div>
 
@@ -39,20 +39,20 @@
         <div class="snippet prompt">
           <pre><code id="install-prompt">Add Cite to this project for local development only. Never ship it to production.
 
-Cite: https://cite.brijr.dev/cite.js
-Docs: https://cite.brijr.dev
+Cite: https://cite.wipds.com/cite.js
+Docs: https://cite.wipds.com
 
 One script. It overlays the page so you can click an element, describe the change, and copy a compact bundle (selector, HTML, relevant CSS, nearby elements, request) into a coding agent.
 
 Astro: in the root layout, at the end of body, render this only when import.meta.env.DEV is true. Use is:inline so Astro does not bundle it.
 
-&lt;script is:inline src="https://cite.brijr.dev/cite.js" data-project="PROJECT"&gt;&lt;/script&gt;
+&lt;script is:inline src="https://cite.wipds.com/cite.js" data-project="PROJECT"&gt;&lt;/script&gt;
 
 Replace PROJECT with this repo's name.
 
 Other stacks: same script, only in dev. Next.js: process.env.NODE_ENV === "development". Vite: import.meta.env.DEV. Otherwise inject only when location.hostname is localhost or 127.0.0.1. data-project namespaces localStorage.
 
-Optional: vendor https://cite.brijr.dev/cite.js into public/cite.js and load /cite.js instead.
+Optional: vendor https://cite.wipds.com/cite.js into public/cite.js and load /cite.js instead.
 
 Verify with the dev server: Cmd+Shift+F (Ctrl+Shift+F on Windows) opens Cite. A circle marked =&gt; appears in the bottom right.
 
