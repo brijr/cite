@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "extension": "ln -f cite.js extension/cite.js"
   },
   "devDependencies": {
     "wrangler": "^4.107.1"

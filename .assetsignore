@@ -12,3 +12,4 @@ CONTEXT.md
 .DS_Store
 .tmp-*
 test/
+extension/

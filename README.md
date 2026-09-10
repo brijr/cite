@@ -61,6 +61,20 @@ To load on `astro preview` as well (the tag ships, then no-ops off localhost):
 </script>
 ```
 
+## Chrome
+
+Use Cite on any site without embedding the script.
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. **Load unpacked** and choose the `extension/` folder in this repo.
+
+Click the Cite icon (or press Cmd+Shift+F / Ctrl+Shift+F) to inspect the current tab. The overlay, keys, and bundle are the same as the embed. Chrome may reserve that shortcut; set it under `chrome://extensions/shortcuts` if it does not bind.
+
+The extension asks for the current tab only when you click. It does not run on every page.
+
+Chrome cannot load files outside `extension/`, so `extension/cite.js` is a hard link to the repo-root script. After a fresh clone, run `npm run extension` if they have drifted.
+
 ## Local
 
 ```bash
