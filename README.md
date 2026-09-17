@@ -114,11 +114,13 @@ Page: /
 Title: Cite — click anything, tell the agent what to change
 URL: https://cite.wipds.com/
 Viewport: 1280×720
+Design: text rgb(34, 34, 34) · bg rgb(255, 255, 255) · 16px · system-ui · --brand: #6d28d9
 
 ## Annotation 1
 
 Element: a.btn.btn-hero.cta-primary
 Selector: a.cta-primary
+Classes: btn btn-hero cta-primary px-4 py-2 rounded-xl
 Text: "Start building"
 Location: Pricing hero → Plans → a.btn.btn-hero.cta-primary
 Box: 220×48 at 530,310

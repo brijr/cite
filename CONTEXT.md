@@ -20,10 +20,6 @@ _Avoid_: Prompt dump, export, snippet, report
 The mode in which pointer events select page elements instead of using the page.
 _Avoid_: Picker, browse, select mode
 
-**Mark**:
-The numbered indicator drawn at a Target's position on the page.
-_Avoid_: Pin, badge, hotspot
-
 **Host**:
 The isolated overlay the script injects (Shadow DOM) so page CSS cannot style the tool, and the tool cannot leak styles into the page.
 _Avoid_: Widget, iframe, layer

@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Cite safety and bundle fixture</title>
     <style>
+      :root {
+        --brand: #6d28d9;
+        --ink: #1c1917;
+        --auth-token: fixture-var-name-secret;
+        --hero-image: url("/hero.png?token=fixture-var-secret#private");
+      }
       body {
         max-width: 720px;
         margin: 40px auto;
@@ -73,6 +79,18 @@
     <section class="grid-target" data-testid="grid-target">
       <article>First card</article>
       <article>Second card</article>
+    </section>
+
+    <section id="design-target" aria-label="Design snapshot fixture">
+      <h2>Design tokens</h2>
+      <button
+        id="utility-class-target"
+        type="button"
+        class="flex items-center justify-between gap-2 rounded-xl bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow hover:bg-violet-800"
+        data-auth-token="fixture-design-attribute-secret"
+      >
+        Save changes
+      </button>
     </section>
 
     <section

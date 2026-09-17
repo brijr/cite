@@ -15,7 +15,7 @@
   const storageKey = `cite:${project}:${location.origin}${location.pathname}`;
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
   const KEY_INSPECT = IS_MAC ? "⌘⇧ F" : "Ctrl+Shift+F";
-  const CAPTURE_VERSION = 4;
+  const CAPTURE_VERSION = 5;
   const TEXT_LIMIT = 160;
   const TITLE_LIMIT = 120;
   const HTML_LIMIT = 800;
@@ -292,7 +292,7 @@
 
   function safeNearbyText(value, { drop = false, scrubFormValue = false } = {}) {
     if (drop) return "";
-    const text = safeText(value, 240);
+    const text = safeText(value, 120);
     if (!scrubFormValue) return text;
     return /^(?:button|input|option|select|textarea)(?:[#.\s]|$)/i.test(text) ? "" : text;
   }
@@ -389,6 +389,62 @@
       if (/_[a-zA-Z0-9]{5,}$/.test(name)) return false;
       return true;
     }).slice(0, 3);
+  }
+
+  function fullClassList(el) {
+    if (!el.classList) return [];
+    return [...el.classList].slice(0, 12).map((name) => safeText(name, 120));
+  }
+
+  function ancestorCrumbs(el) {
+    const crumbs = [];
+    let node = el.parentElement;
+    while (node && node !== document.body && crumbs.length < 3) {
+      crumbs.unshift(safeText(shortName(node), 120));
+      node = node.parentElement;
+    }
+    return crumbs;
+  }
+
+  function keyStyleSnapshot(el) {
+    const computed = getComputedStyle(el);
+    return {
+      color: sanitizeStyleValue("color", computed.color),
+      backgroundColor: sanitizeStyleValue("backgroundColor", computed.backgroundColor),
+      fontSize: sanitizeStyleValue("fontSize", computed.fontSize),
+      fontWeight: sanitizeStyleValue("fontWeight", computed.fontWeight),
+      borderRadius: sanitizeStyleValue("borderRadius", computed.borderRadius),
+    };
+  }
+
+  function keyStyleBits(styles) {
+    const bits = [];
+    if (styles.color) bits.push(styles.color);
+    if (styles.backgroundColor && !isNeutralStyle("backgroundColor", styles.backgroundColor)) {
+      bits.push(`on ${styles.backgroundColor}`);
+    }
+    if (styles.fontSize) bits.push(styles.fontSize);
+    if (styles.fontWeight && !isNeutralStyle("fontWeight", styles.fontWeight)) {
+      bits.push(`weight ${styles.fontWeight}`);
+    }
+    if (styles.borderRadius && !isNeutralStyle("borderRadius", styles.borderRadius)) {
+      bits.push(`radius ${styles.borderRadius}`);
+    }
+    return bits.join(" · ");
+  }
+
+  let snapCacheEl = null;
+  let snapCache = null;
+
+  function elementSnapshot(el) {
+    if (el === snapCacheEl && snapCache) return snapCache;
+    snapCacheEl = el;
+    snapCache = {
+      classes: fullClassList(el),
+      styles: keyStyleSnapshot(el),
+      crumbs: ancestorCrumbs(el),
+    };
+    return snapCache;
   }
 
   function uniqueSelector(el) {
@@ -715,7 +771,7 @@
   function nearbyLabel(el) {
     if (!isRenderedElement(el)) return "";
     const text = visibleText(el);
-    return safeText(`${shortName(el)}${text ? ` ${JSON.stringify(text)}` : ""}`, 240);
+    return safeText(`${shortName(el)}${text ? ` ${JSON.stringify(text)}` : ""}`, 120);
   }
 
   function renderedSibling(el, direction) {
@@ -742,6 +798,8 @@
       name: shortName(el),
       id: el.id || "",
       classes: meaningfulClasses(el),
+      fullClasses: fullClassList(el),
+      crumbs: ancestorCrumbs(el),
       role: el.getAttribute("role") || el.getAttribute("type") || "",
       inputType: el.tagName.toLowerCase() === "input" ? el.getAttribute("type") || "" : "",
       text: visibleText(el),
@@ -842,7 +900,79 @@
       .join("\n");
   }
 
-  function formatAnnotation(annotation, index) {
+  function collectRootVars(rules, take, depth) {
+    if (!rules || depth > 1) return;
+    for (const rule of rules) {
+      if (rule.selectorText && /(?:^|[^\w-])(?::root|html)(?:$|[^\w-])/.test(rule.selectorText)) {
+        const style = rule.style;
+        if (style) {
+          for (let index = 0; index < style.length; index += 1) {
+            const name = style[index];
+            if (name && name.startsWith("--")) take(name, style.getPropertyValue(name));
+          }
+        }
+      } else if (rule.cssRules && (rule.type === 4 || rule.type === 12)) {
+        collectRootVars(rule.cssRules, take, depth + 1);
+      }
+    }
+  }
+
+  function rootCustomProps() {
+    const found = new Map();
+    const take = (name, value) => {
+      const clean = String(name || "").trim().slice(0, 40);
+      if (!clean.startsWith("--") || SENSITIVE_ATTRIBUTE.test(clean) || found.has(clean)) return;
+      if (found.size >= 12) return;
+      const sanitized = truncate(sanitizeStyleValue("customProperty", value), 80);
+      if (sanitized) found.set(clean, sanitized);
+    };
+    try {
+      const inline = document.documentElement.style;
+      for (let index = 0; index < inline.length && found.size < 12; index += 1) {
+        const name = inline[index];
+        if (name && name.startsWith("--")) take(name, inline.getPropertyValue(name));
+      }
+    } catch (_) {
+      /* inline :root props are best-effort */
+    }
+    const sheets = document.styleSheets ? [...document.styleSheets] : [];
+    for (const sheet of sheets) {
+      if (found.size >= 12) break;
+      let rules = null;
+      try {
+        rules = sheet.cssRules;
+      } catch (_) {
+        continue;
+      }
+      collectRootVars(rules, take, 0);
+    }
+    return [...found.entries()];
+  }
+
+  function pageDesignLine() {
+    const parts = [];
+    try {
+      if (document.body) {
+        const body = getComputedStyle(document.body);
+        const color = sanitizeStyleValue("color", body.color);
+        const bg = sanitizeStyleValue("backgroundColor", body.backgroundColor);
+        const size = sanitizeStyleValue("fontSize", body.fontSize);
+        const font = sanitizeStyleValue("fontFamily", body.fontFamily);
+        if (color) parts.push(`text ${color}`);
+        if (bg && !isNeutralStyle("backgroundColor", bg)) parts.push(`bg ${bg}`);
+        if (size) parts.push(size);
+        if (font) parts.push(truncate(font.split(",")[0].replace(/["']/g, "").trim(), 40));
+      }
+    } catch (_) {
+      /* body styles are best-effort */
+    }
+    for (const [name, value] of rootCustomProps()) {
+      parts.push(`${name}: ${value}`);
+    }
+    return truncate(parts.join(" · "), 300);
+  }
+
+  function formatAnnotation(annotation, index, cssText) {
     const target = annotation.target;
     const n = index + 1;
     return [
@@ -850,6 +980,9 @@
       "",
       `Element: ${target.name}`,
       `Selector: ${target.selector}`,
+      target.fullClasses && target.fullClasses.length
+        ? `Classes: ${truncate(target.fullClasses.join(" "), 240)}`
+        : null,
       target.role ? `Role: ${target.role}` : null,
       target.text ? `Text: ${JSON.stringify(target.text)}` : null,
       `Location: ${target.trail}`,
@@ -865,7 +998,7 @@
       "",
       "### Relevant CSS",
       "```css",
-      formatStyles(target.styles),
+      cssText !== undefined ? cssText : formatStyles(target.styles),
       "```",
       "",
       "### Nearby elements",
@@ -881,6 +1014,7 @@
     const safeAnnotations = annotations.map((annotation) => normalizeAnnotation(annotation)).filter(Boolean);
     if (!safeAnnotations.length) return "";
     const first = safeAnnotations[0].target;
+    const design = pageDesignLine();
     const header = [
       "Visual change requests from a web page. Apply each request to the matching element.",
       "",
@@ -888,10 +1022,20 @@
       `Title: ${first.title}`,
       `URL: ${first.url}`,
       `Viewport: ${first.viewport.width}×${first.viewport.height}`,
+      design ? `Design: ${design}` : null,
       "",
       "",
-    ];
-    return `${header.join("\n")}${safeAnnotations.map(formatAnnotation).join("\n\n")}\n`;
+    ].filter((line) => line !== null);
+    const seenStyles = new Map();
+    const bodies = safeAnnotations.map((annotation, index) => {
+      const css = formatStyles(annotation.target.styles);
+      if (seenStyles.has(css)) {
+        return formatAnnotation(annotation, index, `(same as Annotation ${seenStyles.get(css)})`);
+      }
+      seenStyles.set(css, index + 1);
+      return formatAnnotation(annotation, index);
+    });
+    return `${header.join("\n")}${bodies.join("\n\n")}\n`;
   }
 
   function safeNumber(value) {
@@ -935,6 +1079,12 @@
       id: safeText(target.id, 160),
       classes: Array.isArray(target.classes)
         ? target.classes.slice(0, 3).map((name) => safeText(name, 120))
+        : [],
+      fullClasses: Array.isArray(target.fullClasses)
+        ? target.fullClasses.slice(0, 12).map((name) => safeText(name, 120))
+        : [],
+      crumbs: Array.isArray(target.crumbs)
+        ? target.crumbs.slice(0, 3).map((name) => safeText(name, 120))
         : [],
       role,
       inputType: tag === "input" ? inputType : "",
@@ -1078,8 +1228,9 @@
       position: fixed;
       z-index: 4;
       display: flex;
-      align-items: center;
-      gap: 8px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
       max-width: min(420px, calc(100vw - 24px));
       padding: 4px 8px;
       border-radius: 6px;
@@ -1092,12 +1243,25 @@
       pointer-events: none;
       white-space: nowrap;
     }
-    .label b { font-weight: 500; color: var(--accent); }
-    .label span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-    .label i {
+    .label-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .label-main b { font-weight: 500; color: var(--accent); }
+    .label-main span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+    .label-main i {
       font-style: normal;
       color: var(--subtle);
       font-variant-numeric: tabular-nums;
+    }
+    .label-sub {
+      color: var(--subtle);
+      font-size: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .dock {
       position: fixed;
@@ -1235,6 +1399,52 @@
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
     }
+    .detail {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-family: var(--mono);
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--subtle);
+    }
+    .detail div {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .starter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .starter button[data-act="starter"] {
+      flex: 1;
+      min-width: 0;
+      text-align: left;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .starter button[data-act="starter"]:hover { color: var(--accent); }
+    .starter .dismiss {
+      flex: none;
+      color: var(--subtle);
+      font-size: 14px;
+      line-height: 1;
+      padding: 2px 4px;
+    }
+    .starter .dismiss:hover { color: var(--text); }
+    .meta {
+      color: var(--subtle);
+      font-size: 11px;
+      line-height: 1.3;
+      font-variant-numeric: tabular-nums;
+    }
     textarea {
       width: 100%;
       min-height: 88px;
@@ -1313,6 +1523,7 @@
     toast: "",
     hint: !sessionStorage.getItem("cite-hint"),
     help: false,
+    starter: sessionStorage.getItem("cite-starter") !== "0",
   };
 
   let root;
@@ -1349,8 +1560,14 @@
               <code data-el="chipName"></code>
               <small data-el="chipText"></small>
             </div>
+            <div class="detail" data-el="chipDetail" hidden></div>
+            <div class="starter" data-el="starter" hidden>
+              <button type="button" data-act="starter" title="Click to insert"></button>
+              <button type="button" class="dismiss" data-act="starter-dismiss" aria-label="Dismiss starter">×</button>
+            </div>
             <label class="sr-only" for="cite-request" hidden>Change request</label>
             <textarea id="cite-request" name="request" rows="4" placeholder="Make this button smaller and use the same radius as the cards."></textarea>
+            <div class="meta" data-el="estimate" hidden></div>
             <div class="row">
               <span class="composer-keys"></span>
               <button type="button" class="btn" data-act="cancel">Cancel</button>
@@ -1371,6 +1588,10 @@
     els.composer = shadow.querySelector(".composer");
     els.chipName = shadow.querySelector('[data-el="chipName"]');
     els.chipText = shadow.querySelector('[data-el="chipText"]');
+    els.chipDetail = shadow.querySelector('[data-el="chipDetail"]');
+    els.starter = shadow.querySelector('[data-el="starter"]');
+    els.starterBtn = shadow.querySelector('[data-act="starter"]');
+    els.estimate = shadow.querySelector('[data-el="estimate"]');
     els.textarea = shadow.querySelector("textarea");
     els.save = shadow.querySelector('[data-el="save"]');
     els.help = shadow.querySelector(".help");
@@ -1386,7 +1607,7 @@
       els.composer.requestSubmit();
     });
     els.textarea.addEventListener("input", () => {
-      els.save.disabled = !collapse(els.textarea.value);
+      paintComposerDynamic();
     });
     els.veil.addEventListener("mousemove", onPointerMove);
     els.veil.addEventListener("click", (event) => {
@@ -1411,13 +1632,15 @@
   function setInspect(next) {
     state.inspect = next;
     state.hovered = next ? state.hovered : null;
+    snapCacheEl = null;
+    snapCache = null;
     document.documentElement.style.cursor = next ? "crosshair" : "";
     els.veil.hidden = !next;
     if (next) ensureHover();
     else paintHighlight(null);
   }
 
-  function paintHighlight(el) {
+  function paintHighlight(el, showLabel = true) {
     if (!el) {
       els.highlight.hidden = true;
       els.label.hidden = true;
@@ -1431,20 +1654,75 @@
       height: `${Math.max(rect.height, 1)}px`,
     });
     els.highlight.hidden = false;
+    if (!showLabel) {
+      els.label.hidden = true;
+      return;
+    }
 
     const name = shortName(el);
     const size = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
     const text = visibleText(el);
-    els.label.innerHTML = `<b>${escapeHtml(name)}</b>${
+    const snap = elementSnapshot(el);
+    const subBits = [];
+    if (snap.classes.length) subBits.push(truncate(snap.classes.join(" "), 96));
+    const styleBits = keyStyleBits(snap.styles);
+    if (styleBits) subBits.push(styleBits);
+    const sub = subBits.join(" · ");
+    els.label.innerHTML = `<div class="label-main"><b>${escapeHtml(name)}</b>${
       text ? `<span>${escapeHtml(truncate(text, 42))}</span>` : ""
-    }<i>${size}</i>`;
-    const labelTop = rect.top >= 32 ? rect.top - 28 : rect.bottom + 6;
+    }<i>${size}</i></div>${sub ? `<div class="label-sub">${escapeHtml(sub)}</div>` : ""}`;
+    els.label.hidden = false;
+    const labelHeight = els.label.offsetHeight || 28;
+    const labelTop = rect.top >= labelHeight + 4 ? rect.top - labelHeight - 4 : rect.bottom + 6;
     const labelLeft = Math.min(Math.max(8, rect.left), window.innerWidth - 240);
     Object.assign(els.label.style, {
       left: `${labelLeft}px`,
       top: `${labelTop}px`,
     });
-    els.label.hidden = false;
+  }
+
+  function starterInsertText(target) {
+    const classes = target.fullClasses && target.fullClasses.length
+      ? ` (${target.fullClasses.slice(0, 4).join(" ")})`
+      : "";
+    return `Change ${target.name}${classes} to `;
+  }
+
+  function paintDetail() {
+    if (!state.draft) {
+      els.chipDetail.hidden = true;
+      return;
+    }
+    const target = state.draft.target;
+    const rows = [];
+    if (target.fullClasses && target.fullClasses.length) {
+      rows.push(`classes: ${truncate(target.fullClasses.join(" "), 140)}`);
+    }
+    const styleBits = keyStyleBits(target.styles || {});
+    if (styleBits) rows.push(`style: ${styleBits}`);
+    if (target.crumbs && target.crumbs.length) {
+      rows.push(`in: ${target.crumbs.join(" › ")}`);
+    }
+    if (target.rect) {
+      rows.push(`box: ${target.rect.width}×${target.rect.height}`);
+    }
+    els.chipDetail.hidden = !rows.length;
+    els.chipDetail.innerHTML = rows.map((row) => `<div>${escapeHtml(row)}</div>`).join("");
+  }
+
+  function paintComposerDynamic() {
+    if (!state.draft) return;
+    els.save.disabled = !collapse(els.textarea.value);
+    const showStarter = state.starter && !collapse(els.textarea.value);
+    els.starter.hidden = !showStarter;
+    if (showStarter) {
+      els.starterBtn.textContent = starterInsertText(state.draft.target);
+    }
+    const request = collapse(els.textarea.value) || "(your request)";
+    const body = formatAnnotation({ request, target: state.draft.target }, 0);
+    const tokens = Math.max(1, Math.ceil((body.length + 400) / 4));
+    els.estimate.hidden = false;
+    els.estimate.textContent = `~${tokens} tokens`;
   }
 
   function paintPopover() {
@@ -1457,7 +1735,8 @@
     els.chipText.textContent = state.draft.target.text
       ? `“${state.draft.target.text}”`
       : state.draft.target.trail;
-    els.save.disabled = !collapse(els.textarea.value);
+    paintDetail();
+    paintComposerDynamic();
     if (window.innerWidth <= 520) {
       Object.assign(els.popover.style, {
         left: "8px",
@@ -1537,7 +1816,7 @@
       : state.inspect
         ? state.hovered
         : null;
-    paintHighlight(locked);
+    paintHighlight(locked, !state.draft);
   }
 
   function dismissHint() {
@@ -1596,6 +1875,23 @@
       state.draft = null;
       els.textarea.value = "";
       setInspect(true);
+      sync();
+      return;
+    }
+    if (act === "starter") {
+      if (!state.draft) return;
+      els.textarea.value = starterInsertText(state.draft.target);
+      els.textarea.focus();
+      paintComposerDynamic();
+      return;
+    }
+    if (act === "starter-dismiss") {
+      state.starter = false;
+      try {
+        sessionStorage.setItem("cite-starter", "0");
+      } catch (_) {
+        /* dismiss persistence is best-effort */
+      }
       sync();
     }
   }

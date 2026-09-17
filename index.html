@@ -24,8 +24,8 @@
         <h1>Click anything. Tell the agent what to change.</h1>
         <p class="intro">
           One script on any website. Click an element, describe the change, and
-          copy a compact bundle for Claude, Cursor, or Codex. Selector, HTML,
-          relevant CSS, nearby elements, and the request.
+          copy a compact bundle for Claude, Cursor, or Codex. Selector, classes,
+          HTML, relevant CSS, nearby elements, page design, and the request.
         </p>
         <p class="intro muted">No accounts. No backend. No build step.</p>
 
@@ -42,7 +42,7 @@
 Cite: https://cite.wipds.com/cite.js
 Docs: https://cite.wipds.com
 
-One script. It overlays the page so you can click an element, describe the change, and copy a compact bundle (selector, HTML, relevant CSS, nearby elements, request) into a coding agent.
+One script. It overlays the page so you can click an element, describe the change, and copy a compact bundle (selector, classes, HTML, relevant CSS, nearby elements, page design, request) into a coding agent.
 
 Astro: in the root layout, at the end of body, render this only when import.meta.env.DEV is true. Use is:inline so Astro does not bundle it.
 
@@ -62,7 +62,7 @@ Do not add a package, backend, or auth.</code></pre>
 
         <h2>Use</h2>
         <ol>
-          <li>Press Cmd+Shift+F to inspect</li>
+          <li>Press Cmd+Shift+F (or click =&gt;) to inspect</li>
           <li>Tab or arrows to an element, then Enter</li>
           <li>Write the change, then Enter to copy it</li>
         </ol>
@@ -79,12 +79,13 @@ Do not add a package, backend, or auth.</code></pre>
 
         <h2>Copied with each annotation</h2>
         <p>
-          Selector, capped visible text, sanitized HTML, relevant CSS, nearby
-          elements, geometry, and a query-free page URL.
+          Selector, element classes, capped visible text, sanitized HTML,
+          relevant CSS, nearby elements, geometry, page design tokens, and a
+          query-free page URL.
         </p>
 
         <h2>Try it</h2>
-        <p>This page has Cite loaded. Press Cmd+Shift+F and mark anything here.</p>
+        <p>This page has Cite loaded. Press Cmd+Shift+F and cite anything here.</p>
       </main>
 
       <footer>
