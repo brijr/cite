@@ -15,12 +15,10 @@
   const storageKey = `cite:${project}:${location.origin}${location.pathname}`;
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
   const KEY_INSPECT = IS_MAC ? "⌘⇧ F" : "Ctrl+Shift+F";
-  const KEY_COPY = "C";
-  const KEY_SAVE = IS_MAC ? "⌘↵" : "Ctrl+Enter";
   const CAPTURE_VERSION = 4;
   const TEXT_LIMIT = 160;
   const TITLE_LIMIT = 120;
-  const HTML_LIMIT = 1200;
+  const HTML_LIMIT = 800;
   const ATTRIBUTE_LIMIT = 200;
   const TARGET_SEL = [
     "a[href]",
@@ -771,36 +769,65 @@
 
   function isNeutralStyle(key, value) {
     if (!value) return true;
+    if (key === "border") return value === "none" || value.startsWith("0px");
+    if (key === "outline") return value === "none" || /\bnone\b/.test(value);
     const exact = {
+      alignItems: "normal",
+      backgroundColor: "rgba(0, 0, 0, 0)",
       backgroundImage: "none",
+      borderRadius: "0px",
       boxShadow: "none",
+      boxSizing: "border-box",
       flex: "0 1 auto",
+      flexDirection: "row",
+      flexWrap: "nowrap",
       fontStyle: "normal",
+      fontWeight: "400",
       gap: "normal",
+      gridTemplateColumns: "none",
+      gridTemplateRows: "none",
+      justifyContent: "normal",
       letterSpacing: "normal",
+      lineHeight: "normal",
+      margin: "0px",
       maxHeight: "none",
       maxWidth: "none",
       minHeight: "0px",
       minWidth: "0px",
       opacity: "1",
       overflow: "visible",
+      padding: "0px",
+      position: "static",
+      textAlign: "start",
       textDecoration: "none",
       textTransform: "none",
       transform: "none",
       zIndex: "auto",
     };
-    if (key === "outline") return value === "none" || /\bnone\b/.test(value);
     return exact[key] === value;
   }
 
+  const ALWAYS_STYLE_KEYS = new Set(["display", "width", "height", "fontFamily", "fontSize", "color"]);
+
   function relevantStyleEntries(styles) {
-    const keys = new Set(BASE_STYLE_KEYS);
+    const keys = new Set();
+    for (const key of BASE_STYLE_KEYS) {
+      if (ALWAYS_STYLE_KEYS.has(key) || !isNeutralStyle(key, styles[key])) keys.add(key);
+    }
     for (const key of CONDITIONAL_STYLE_KEYS) {
       if (!isNeutralStyle(key, styles[key])) keys.add(key);
     }
     const display = styles.display || "";
-    if (display.includes("flex")) FLEX_STYLE_KEYS.forEach((key) => keys.add(key));
-    if (display.includes("grid")) GRID_STYLE_KEYS.forEach((key) => keys.add(key));
+    if (display.includes("flex")) {
+      for (const key of FLEX_STYLE_KEYS) {
+        if (!isNeutralStyle(key, styles[key])) keys.add(key);
+      }
+    }
+    if (display.includes("grid")) {
+      for (const key of GRID_STYLE_KEYS) {
+        if (!isNeutralStyle(key, styles[key])) keys.add(key);
+      }
+    }
     return [...keys]
       .filter((key) => styles[key])
       .map((key) => [key, styles[key]]);
@@ -826,7 +853,7 @@
       target.role ? `Role: ${target.role}` : null,
       target.text ? `Text: ${JSON.stringify(target.text)}` : null,
       `Location: ${target.trail}`,
-      `Box: ${target.rect.width}×${target.rect.height} at ${target.rect.x},${target.rect.y} (viewport ${target.viewport.width}×${target.viewport.height})`,
+      `Box: ${target.rect.width}×${target.rect.height} at ${target.rect.x},${target.rect.y}`,
       "",
       "Request:",
       annotation.request,
@@ -855,13 +882,12 @@
     if (!safeAnnotations.length) return "";
     const first = safeAnnotations[0].target;
     const header = [
-      "The following are visual change requests captured from a web page.",
-      "Apply each request to the matching element.",
-      "The selector and rendered context describe the page at the captured viewport.",
+      "Visual change requests from a web page. Apply each request to the matching element.",
       "",
       `Page: ${first.path}`,
       `Title: ${first.title}`,
       `URL: ${first.url}`,
+      `Viewport: ${first.viewport.width}×${first.viewport.height}`,
       "",
       "",
     ];
@@ -1073,25 +1099,6 @@
       color: var(--subtle);
       font-variant-numeric: tabular-nums;
     }
-    .marks { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
-    .mark {
-      position: fixed;
-      width: 20px;
-      height: 20px;
-      margin: -10px 0 0 -10px;
-      border-radius: 999px;
-      background: var(--accent);
-      color: var(--accent-text);
-      font-size: 11px;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-      line-height: 20px;
-      text-align: center;
-      pointer-events: auto;
-      cursor: pointer;
-      box-shadow: 0 0 0 2px oklch(0.18 0.012 260 / 0.7);
-    }
-    .mark:hover, .mark.is-active { background: oklch(0.88 0.13 85); }
     .dock {
       position: fixed;
       right: 16px;
@@ -1122,79 +1129,11 @@
     }
     .fab:hover { background: var(--bg-hover); }
     .fab:active { transform: scale(0.97); }
-    .fab-count {
-      position: absolute;
-      top: -4px;
-      right: -4px;
-      min-width: 16px;
-      height: 16px;
-      padding: 0 4px;
-      border-radius: 999px;
-      background: var(--accent);
-      color: var(--accent-text);
-      font-size: 10px;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-      line-height: 16px;
-    }
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      padding: 4px;
-      border-radius: 999px;
-      background: var(--bg);
-      box-shadow:
-        0 0 0 1px oklch(1 0 0 / 0.08),
-        0 10px 30px oklch(0 0 0 / 0.28);
-    }
-    .dock:not(.is-open) .toolbar { display: none; }
-    .dock.is-open .fab { display: none; }
-    .toolbar button {
-      height: 32px;
-      padding: 0 12px;
-      border-radius: 999px;
-      font-size: 13px;
-      line-height: 1;
-      color: var(--muted);
-      white-space: nowrap;
-      transition: background-color 140ms ease, color 140ms ease, transform 140ms var(--ease);
-    }
-    kbd {
-      font: inherit;
-      color: var(--subtle);
-      margin-left: 8px;
-      letter-spacing: 0.06em;
-    }
-    .toolbar button:hover { background: var(--bg-hover); color: var(--text); }
-    .toolbar button:active { transform: scale(0.97); }
-    .toolbar button.is-on {
+    .fab.is-on {
       background: var(--accent);
       color: var(--accent-text);
     }
-    .toolbar button.is-on kbd {
-      color: var(--accent-text);
-      background: oklch(0.22 0.04 75 / 0.1);
-      padding: 3px 6px;
-      border-radius: 5px;
-      letter-spacing: 0.08em;
-    }
-    .toolbar button.is-on:hover { background: oklch(0.86 0.13 80); }
-    .toolbar .primary {
-      color: var(--text);
-      font-weight: 500;
-    }
-    .toolbar .count {
-      min-width: 32px;
-      padding: 0 10px;
-      font-variant-numeric: tabular-nums;
-    }
-    .toolbar .sep {
-      width: 1px;
-      height: 16px;
-      margin: 0 4px;
-      background: var(--line);
-    }
+    .fab.is-on:hover { background: oklch(0.86 0.13 80); }
     .hint {
       position: fixed;
       right: 16px;
@@ -1251,15 +1190,16 @@
       color: var(--subtle);
       font-size: 11px;
     }
-    .panel {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      bottom: 68px;
-      z-index: 6;
+    .composer {
       display: flex;
       flex-direction: column;
-      width: 360px;
+      gap: 10px;
+      padding: 12px 14px;
+    }
+    .popover {
+      position: fixed;
+      z-index: 9;
+      width: 320px;
       max-width: calc(100vw - 24px);
       border-radius: var(--radius);
       background: var(--bg);
@@ -1269,43 +1209,8 @@
       pointer-events: auto;
       overflow: hidden;
     }
-    .panel-head, .panel-foot {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px 14px;
-    }
-    .panel-head {
-      border-bottom: 1px solid var(--line);
-    }
-    .panel-foot {
-      border-top: 1px solid var(--line);
-    }
-    .panel h2 {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: -0.01em;
-      text-wrap: balance;
-    }
-    .icon-btn {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      color: var(--muted);
-      transition: background-color 140ms ease, color 140ms ease, transform 140ms var(--ease);
-    }
-    .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
-    .icon-btn:active { transform: scale(0.97); }
-    .composer, .list, .empty {
-      padding: 12px 14px;
-    }
-    .composer {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      border-bottom: 1px solid var(--line);
+    .popover textarea {
+      min-height: 72px;
     }
     .chip {
       display: flex;
@@ -1375,54 +1280,6 @@
       cursor: default;
       transform: none;
     }
-    .list {
-      flex: 1;
-      overflow: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .item {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      width: 100%;
-      padding: 10px;
-      border-radius: var(--control);
-      text-align: left;
-      color: inherit;
-      transition: background-color 140ms ease;
-    }
-    .item:hover, .item.is-active { background: var(--bg-raised); }
-    .item-top {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .item strong {
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 1.4;
-      text-wrap: pretty;
-    }
-    .item code {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--subtle);
-    }
-    .item-actions {
-      display: flex;
-      gap: 4px;
-      margin-top: 4px;
-    }
-    .empty {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
-      text-wrap: pretty;
-    }
-    .panel-foot .btn-primary { width: 100%; }
     .toast {
       position: fixed;
       right: 16px;
@@ -1440,29 +1297,19 @@
       textarea { font-size: 13px; }
     }
     @media (max-width: 520px) {
-      .panel {
-        top: auto;
-        left: 8px;
-        right: 8px;
-        bottom: 64px;
-        width: auto;
-        height: min(58vh, 480px);
-      }
       .hint { display: none; }
-      .toolbar kbd, .composer-keys { display: none; }
+      .composer-keys { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .toolbar button, .btn, .icon-btn, .fab { transition: none; }
+      .btn, .fab { transition: none; }
     }
   `;
 
   const state = {
     inspect: false,
-    panel: false,
     draft: null,
     hovered: null,
     annotations: loadAnnotations(),
-    activeId: null,
     toast: "",
     hint: !sessionStorage.getItem("cite-hint"),
     help: false,
@@ -1472,7 +1319,6 @@
   let shadow;
   let els = {};
   let toastTimer = 0;
-  let copyTimer = 0;
   let raf = 0;
 
   function mount() {
@@ -1493,24 +1339,12 @@
         <div class="veil" hidden></div>
         <div class="highlight" hidden></div>
         <div class="label" hidden></div>
-        <div class="marks"></div>
         <div class="hint" hidden></div>
         <div class="dock">
-          <button type="button" class="fab" data-act="open" aria-label="Open Cite" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">=><span class="fab-count" hidden>0</span></button>
-          <div class="toolbar" role="toolbar" aria-label="Cite">
-            <button type="button" data-act="inspect" aria-pressed="false" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">Feedback <kbd></kbd></button>
-            <span class="sep"></span>
-            <button type="button" class="count" data-act="panel" aria-label="Open annotations">0</button>
-            <span class="sep"></span>
-            <button type="button" class="primary" data-act="copy" aria-keyshortcuts="c">Copy Feedback <kbd></kbd></button>
-          </div>
+          <button type="button" class="fab" data-act="open" aria-label="Open Cite" aria-pressed="false" aria-keyshortcuts="Control+Shift+F Meta+Shift+F">=></button>
         </div>
-        <aside class="panel" hidden>
-          <header class="panel-head">
-            <h2>Annotations</h2>
-            <button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button>
-          </header>
-          <form class="composer" hidden>
+        <div class="popover" hidden>
+          <form class="composer">
             <div class="chip">
               <code data-el="chipName"></code>
               <small data-el="chipText"></small>
@@ -1520,15 +1354,10 @@
             <div class="row">
               <span class="composer-keys"></span>
               <button type="button" class="btn" data-act="cancel">Cancel</button>
-              <button type="submit" class="btn btn-primary" data-el="save">Save</button>
+              <button type="submit" class="btn btn-primary" data-el="save">Copy</button>
             </div>
           </form>
-          <div class="list" data-el="list"></div>
-          <div class="empty" data-el="empty" hidden></div>
-          <footer class="panel-foot">
-            <button type="button" class="btn btn-primary" data-act="copy">Copy Feedback</button>
-          </footer>
-        </aside>
+        </div>
         <div class="help" hidden></div>
         <div class="toast" hidden></div>
       </div>
@@ -1536,38 +1365,25 @@
     els.veil = shadow.querySelector(".veil");
     els.highlight = shadow.querySelector(".highlight");
     els.label = shadow.querySelector(".label");
-    els.marks = shadow.querySelector(".marks");
     els.hint = shadow.querySelector(".hint");
-    els.dock = shadow.querySelector(".dock");
     els.fab = shadow.querySelector(".fab");
-    els.fabCount = shadow.querySelector(".fab-count");
-    els.toolbar = shadow.querySelector(".toolbar");
-    els.inspect = shadow.querySelector('[data-act="inspect"]');
-    els.count = shadow.querySelector(".count");
-    els.panel = shadow.querySelector(".panel");
+    els.popover = shadow.querySelector(".popover");
     els.composer = shadow.querySelector(".composer");
     els.chipName = shadow.querySelector('[data-el="chipName"]');
     els.chipText = shadow.querySelector('[data-el="chipText"]');
     els.textarea = shadow.querySelector("textarea");
     els.save = shadow.querySelector('[data-el="save"]');
-    els.list = shadow.querySelector('[data-el="list"]');
-    els.empty = shadow.querySelector('[data-el="empty"]');
     els.help = shadow.querySelector(".help");
     els.toast = shadow.querySelector(".toast");
-    els.inspectKbd = els.inspect.querySelector("kbd");
-    els.copyKbd = shadow.querySelector(".toolbar [data-act='copy'] kbd");
     els.composerKeys = shadow.querySelector(".composer-keys");
-    if (els.inspectKbd) els.inspectKbd.textContent = KEY_INSPECT;
-    if (els.copyKbd) els.copyKbd.textContent = KEY_COPY;
-    if (els.composerKeys) els.composerKeys.textContent = `${KEY_SAVE} save · Esc cancel`;
+    if (els.composerKeys) els.composerKeys.textContent = "Enter copy · Shift+Enter newline · Esc cancel";
 
     shadow.addEventListener("click", onUiClick);
     els.composer.addEventListener("submit", onSave);
     els.textarea.addEventListener("keydown", (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-        event.preventDefault();
-        els.composer.requestSubmit();
-      }
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      els.composer.requestSubmit();
     });
     els.textarea.addEventListener("input", () => {
       els.save.disabled = !collapse(els.textarea.value);
@@ -1577,17 +1393,6 @@
       event.preventDefault();
       selectAt(event);
     });
-  }
-
-  function setCopyLabels(copied) {
-    const toolbar = shadow.querySelector(".toolbar [data-act='copy']");
-    const panel = shadow.querySelector(".panel-foot [data-act='copy']");
-    if (toolbar) {
-      toolbar.innerHTML = copied
-        ? "Copied"
-        : `Copy Feedback <kbd>${KEY_COPY}</kbd>`;
-    }
-    if (panel) panel.textContent = copied ? "Copied" : "Copy Feedback";
   }
 
   function showToast(message) {
@@ -1607,20 +1412,9 @@
     state.inspect = next;
     state.hovered = next ? state.hovered : null;
     document.documentElement.style.cursor = next ? "crosshair" : "";
-    els.inspect.classList.toggle("is-on", next);
-    els.inspect.setAttribute("aria-pressed", String(next));
     els.veil.hidden = !next;
     if (next) ensureHover();
     else paintHighlight(null);
-  }
-
-  function setPanel(next) {
-    state.panel = next;
-    els.panel.hidden = !next;
-    if (!next) {
-      state.draft = null;
-      els.composer.hidden = true;
-    }
   }
 
   function paintHighlight(el) {
@@ -1653,77 +1447,40 @@
     els.label.hidden = false;
   }
 
-  function targetRect(annotation) {
-    try {
-      const el = document.querySelector(annotation.target.selector);
-      if (el && el.isConnected) return el.getBoundingClientRect();
-    } catch (_) {
-      /* stale selector */
-    }
-    const { page, rect } = annotation.target;
-    return {
-      left: (page?.x ?? rect.x) - window.scrollX,
-      top: (page?.y ?? rect.y) - window.scrollY,
-      width: rect.width,
-      height: rect.height,
-      right: 0,
-      bottom: 0,
-    };
-  }
-
-  function paintMarks() {
-    els.marks.innerHTML = state.annotations
-      .map((annotation, index) => {
-        const rect = targetRect(annotation);
-        const x = rect.left + rect.width - 2;
-        const y = rect.top + 2;
-        if (y < -20 || y > window.innerHeight + 20) return "";
-        const active = annotation.id === state.activeId ? " is-active" : "";
-        return `<button type="button" class="mark${active}" data-act="focus" data-id="${annotation.id}" style="left:${x}px;top:${y}px" aria-label="Annotation ${index + 1}">${index + 1}</button>`;
-      })
-      .join("");
-  }
-
-  function paintList() {
-    const items = state.annotations;
-    els.count.textContent = String(items.length);
-    if (!items.length) {
-      els.list.innerHTML = "";
-      els.empty.hidden = Boolean(state.draft);
-      els.empty.textContent = `Press ${KEY_INSPECT}, then cite anything on the page.`;
-      return;
-    }
-    els.empty.hidden = true;
-    els.list.innerHTML = items
-      .map((annotation, index) => {
-        const active = annotation.id === state.activeId ? " is-active" : "";
-        return `
-          <div class="item${active}" data-id="${annotation.id}">
-            <div class="item-top">
-              <strong>${index + 1}. ${escapeHtml(truncate(annotation.request, 90))}</strong>
-            </div>
-            <code>${escapeHtml(annotation.target.name)}</code>
-            <div class="item-actions">
-              <button type="button" class="btn" data-act="copy-one" data-id="${annotation.id}">Copy</button>
-              <button type="button" class="btn" data-act="delete" data-id="${annotation.id}">Delete</button>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-  }
-
-  function paintComposer() {
+  function paintPopover() {
     if (!state.draft) {
-      els.composer.hidden = true;
+      els.popover.hidden = true;
       return;
     }
-    els.composer.hidden = false;
+    els.popover.hidden = false;
     els.chipName.textContent = state.draft.target.name;
     els.chipText.textContent = state.draft.target.text
       ? `“${state.draft.target.text}”`
       : state.draft.target.trail;
     els.save.disabled = !collapse(els.textarea.value);
+    if (window.innerWidth <= 520) {
+      Object.assign(els.popover.style, {
+        left: "8px",
+        right: "8px",
+        top: "auto",
+        bottom: "64px",
+        width: "auto",
+      });
+      return;
+    }
+    els.popover.style.right = "";
+    els.popover.style.bottom = "";
+    els.popover.style.width = "";
+    const w = els.popover.offsetWidth;
+    const h = els.popover.offsetHeight;
+    const px = state.draft.x - window.scrollX;
+    const py = state.draft.y - window.scrollY;
+    let left = px + 12;
+    let top = py + 12;
+    if (left + w > window.innerWidth - 8) left = px - w - 12;
+    if (top + h > window.innerHeight - 8) top = py - h - 12;
+    els.popover.style.left = `${Math.max(8, Math.min(left, window.innerWidth - w - 8))}px`;
+    els.popover.style.top = `${Math.max(8, Math.min(top, window.innerHeight - h - 8))}px`;
   }
 
   function paintHint() {
@@ -1740,13 +1497,10 @@
   }
 
   function paintDock() {
-    const open = state.inspect || state.panel || Boolean(state.draft) || state.help;
-    els.dock.classList.toggle("is-open", open);
-    const n = state.annotations.length;
-    if (els.fabCount) {
-      els.fabCount.hidden = !n || open;
-      els.fabCount.textContent = String(n);
-    }
+    const open = state.inspect || Boolean(state.draft) || state.help;
+    els.fab.classList.toggle("is-on", open);
+    els.fab.setAttribute("aria-pressed", String(open));
+    els.fab.setAttribute("aria-label", open ? "Close Cite" : "Open Cite");
   }
 
   function paintHelp() {
@@ -1759,11 +1513,8 @@
         <dt>${escapeHtml(KEY_INSPECT)}</dt><dd>Inspect</dd>
         <dt>Tab ⇧Tab</dt><dd>Next / previous element</dd>
         <dt>↑ ↓ ← →</dt><dd>Move</dd>
-        <dt>Enter</dt><dd>Cite this element</dd>
-        <dt>${escapeHtml(KEY_SAVE)}</dt><dd>Save request</dd>
-        <dt>${escapeHtml(KEY_COPY)}</dt><dd>Copy and resolve</dd>
-        <dt>${escapeHtml(IS_MAC ? "⌥P" : "Alt+P")}</dt><dd>Annotations</dd>
-        <dt>J K</dt><dd>Next / previous annotation</dd>
+        <dt>Enter</dt><dd>Cite, then copy</dd>
+        <dt>⇧Enter</dt><dd>New line</dd>
         <dt>?</dt><dd>This list</dd>
         <dt>Esc</dt><dd>Back</dd>
       </dl>
@@ -1771,9 +1522,7 @@
   }
 
   function sync() {
-    paintMarks();
-    paintList();
-    paintComposer();
+    paintPopover();
     paintHint();
     paintHelp();
     paintDock();
@@ -1819,9 +1568,6 @@
       document.execCommand("copy");
       helper.remove();
     }
-    setCopyLabels(true);
-    clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => setCopyLabels(false), 1400);
     showToast("Copied — paste into Claude, Cursor, or Codex");
   }
 
@@ -1833,7 +1579,6 @@
     const bundle = formatBundle(annotations);
     const ids = new Set(annotations.map((item) => item.id));
     state.annotations = state.annotations.filter((item) => !ids.has(item.id));
-    if (ids.has(state.activeId)) state.activeId = null;
     persistAnnotations(state.annotations);
     sync();
     copyText(bundle);
@@ -1847,46 +1592,11 @@
       toggleInspect();
       return;
     }
-    if (act === "inspect") {
-      toggleInspect();
-      return;
-    }
-    if (act === "panel") {
-      setPanel(!state.panel);
-      sync();
-      return;
-    }
-    if (act === "close") {
-      setPanel(false);
-      setInspect(false);
-      sync();
-      return;
-    }
     if (act === "cancel") {
       state.draft = null;
       els.textarea.value = "";
       setInspect(true);
       sync();
-      return;
-    }
-    if (act === "copy") {
-      copyAndResolve(state.annotations);
-      return;
-    }
-    if (act === "copy-one") {
-      const annotation = state.annotations.find((item) => item.id === button.dataset.id);
-      if (annotation) copyAndResolve([annotation]);
-      return;
-    }
-    if (act === "delete") {
-      state.annotations = state.annotations.filter((item) => item.id !== button.dataset.id);
-      if (state.activeId === button.dataset.id) state.activeId = null;
-      persistAnnotations(state.annotations);
-      sync();
-      return;
-    }
-    if (act === "focus") {
-      focusAnnotation(button.dataset.id);
     }
   }
 
@@ -1905,12 +1615,10 @@
     state.annotations.push(annotation);
     persistAnnotations(state.annotations);
     state.draft = null;
-    state.activeId = state.annotations[state.annotations.length - 1].id;
     els.textarea.value = "";
     els.textarea.blur();
     setInspect(true);
-    showToast("Saved");
-    sync();
+    copyAndResolve([annotation]);
   }
 
   function elementFromPoint(event) {
@@ -2020,50 +1728,31 @@
     revealHover();
   }
 
-  function citeElement(el) {
+  function citeElement(el, point) {
     if (!el) return;
     dismissHint();
     state.help = false;
-    state.draft = { target: captureTarget(el) };
+    const rect = el.getBoundingClientRect();
+    const anchor = point || {
+      x: rect.right + window.scrollX,
+      y: rect.top + window.scrollY,
+    };
+    state.draft = {
+      target: captureTarget(el),
+      x: Math.round(anchor.x),
+      y: Math.round(anchor.y),
+    };
     state.hovered = el;
     els.textarea.value = "";
-    setPanel(true);
     setInspect(false);
     sync();
     els.textarea.focus();
-  }
-
-  function focusAnnotation(id) {
-    const annotation = state.annotations.find((item) => item.id === id);
-    if (!annotation) return;
-    state.activeId = id;
-    setPanel(true);
-    setInspect(false);
-    try {
-      document.querySelector(annotation.target.selector)?.scrollIntoView({
-        block: "center",
-        behavior: "smooth",
-      });
-    } catch (_) {
-      /* ignore */
-    }
-    sync();
-  }
-
-  function moveAnnotation(delta) {
-    if (!state.annotations.length) return;
-    const ids = state.annotations.map((item) => item.id);
-    let index = ids.indexOf(state.activeId);
-    if (index < 0) index = delta > 0 ? -1 : 0;
-    index = Math.max(0, Math.min(ids.length - 1, index + delta));
-    focusAnnotation(ids[index]);
   }
 
   function toggleInspect() {
     dismissHint();
     state.help = false;
     setInspect(!state.inspect);
-    if (!state.inspect && !state.annotations.length && !state.draft) setPanel(false);
     sync();
   }
 
@@ -2075,7 +1764,7 @@
 
   function selectAt(event) {
     const el = elementFromPoint(event);
-    if (el) citeElement(el);
+    if (el) citeElement(el, { x: event.clientX + window.scrollX, y: event.clientY + window.scrollY });
   }
 
   function onPointerDown(event) {
@@ -2137,10 +1826,6 @@
         sync();
         return;
       }
-      if (state.panel) {
-        setPanel(false);
-        sync();
-      }
       return;
     }
 
@@ -2168,18 +1853,10 @@
       return;
     }
 
-    if (event.altKey && !event.metaKey && !event.ctrlKey && letter === "p") {
-      event.preventDefault();
-      setPanel(!state.panel);
-      if (state.panel) setInspect(false);
-      sync();
-      return;
-    }
-
     if (hostTyping(event)) return;
 
     if (key === "?" || (event.shiftKey && key === "/")) {
-      if (state.inspect || state.panel || state.help) {
+      if (state.inspect || state.draft || state.help) {
         event.preventDefault();
         toggleHelp();
       }
@@ -2220,43 +1897,8 @@
         citeElement(state.hovered);
         return;
       }
-      if (letter === "c") {
-        event.preventDefault();
-        copyAndResolve(state.annotations);
-        return;
-      }
     }
 
-    if (state.panel && !state.draft) {
-      if (letter === "j" || key === "ArrowDown") {
-        event.preventDefault();
-        moveAnnotation(1);
-        return;
-      }
-      if (letter === "k" || key === "ArrowUp") {
-        event.preventDefault();
-        moveAnnotation(-1);
-        return;
-      }
-      if (letter === "c") {
-        event.preventDefault();
-        copyAndResolve(state.annotations);
-        return;
-      }
-      if (letter === "d" || key === "Backspace") {
-        if (!state.activeId) return;
-        event.preventDefault();
-        state.annotations = state.annotations.filter((item) => item.id !== state.activeId);
-        state.activeId = state.annotations[0] ? state.annotations[0].id : null;
-        persistAnnotations(state.annotations);
-        sync();
-        return;
-      }
-      if (letter === "i") {
-        event.preventDefault();
-        toggleInspect();
-      }
-    }
   }
 
   function onLayout() {
@@ -2271,6 +1913,13 @@
   window.addEventListener("scroll", onLayout, true);
   window.addEventListener("resize", onLayout);
   sync();
+  if (state.annotations.length) {
+    const cleared = state.annotations.length;
+    state.annotations = [];
+    persistAnnotations(state.annotations);
+    sync();
+    showToast(`Cleared ${cleared} unsent annotation${cleared === 1 ? "" : "s"} from an older version`);
+  }
 
   window.__cite = {
     inspect() {

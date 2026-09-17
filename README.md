@@ -93,29 +93,27 @@ Serves `cite.js` at [cite.wipds.com/cite.js](https://cite.wipds.com/cite.js).
 
 ## Use
 
-1. Press `Cmd+Shift+F` (or click **Inspect**).
+1. Press `Cmd+Shift+F` (or click the `=>` button).
 2. `Tab` / arrows to an element. `Enter` cites it. Click still works.
-3. Write the change. `⌘Enter` / `Ctrl+Enter` saves. `Esc` backs up.
-4. `C` copies the bundle and removes those annotations from the list.
+3. Write the change. `Enter` copies it to your clipboard. `Shift+Enter` adds a line. `Esc` backs up.
 
 `?` opens the shortcut list while Cite is active.
 
-Annotations persist per page in `localStorage`. Marks stay on the page so you can stack several requests, then copy them as one bundle.
+Each request copies straight to your clipboard — nothing is stored.
 
-Cite omits live form values, URL query strings and fragments, and sensitive HTML attributes from stored and copied annotations.
+Cite omits live form values, URL query strings and fragments, and sensitive HTML attributes from copied bundles.
 
 ## Bundle
 
 The copied text looks like this:
 
 ```text
-The following are visual change requests captured from a web page.
-Apply each request to the matching element.
-The selector and rendered context describe the page at the captured viewport.
+Visual change requests from a web page. Apply each request to the matching element.
 
 Page: /
 Title: Cite — click anything, tell the agent what to change
 URL: https://cite.wipds.com/
+Viewport: 1280×720
 
 ## Annotation 1
 
@@ -123,6 +121,7 @@ Element: a.btn.btn-hero.cta-primary
 Selector: a.cta-primary
 Text: "Start building"
 Location: Pricing hero → Plans → a.btn.btn-hero.cta-primary
+Box: 220×48 at 530,310
 
 Request:
 Make this button smaller and use the same radius as the cards.
