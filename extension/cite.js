@@ -417,20 +417,31 @@
     };
   }
 
-  function keyStyleBits(styles) {
-    const bits = [];
-    if (styles.color) bits.push(styles.color);
-    if (styles.backgroundColor && !isNeutralStyle("backgroundColor", styles.backgroundColor)) {
-      bits.push(`on ${styles.backgroundColor}`);
+  function colorDot(value) {
+    if (!/^(?:#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\([^<>";{}]*\)|[a-zA-Z]+)$/.test(value)) {
+      return "";
     }
-    if (styles.fontSize) bits.push(styles.fontSize);
-    if (styles.fontWeight && !isNeutralStyle("fontWeight", styles.fontWeight)) {
-      bits.push(`weight ${styles.fontWeight}`);
+    return `<i class="dot" aria-hidden="true" style="background:${escapeHtml(value)}"></i>`;
+  }
+
+  function styleSegmentsHtml(styles) {
+    const segs = [];
+    if (styles.color) segs.push(`${colorDot(styles.color)}${escapeHtml(styles.color)}`);
+    if (styles.backgroundColor && !isNeutralStyle("backgroundColor", styles.backgroundColor)) {
+      segs.push(`on ${colorDot(styles.backgroundColor)}${escapeHtml(styles.backgroundColor)}`);
+    }
+    const heavy = styles.fontWeight && !isNeutralStyle("fontWeight", styles.fontWeight)
+      ? styles.fontWeight
+      : "";
+    if (styles.fontSize) {
+      segs.push(escapeHtml(heavy ? `${heavy} ${styles.fontSize}` : styles.fontSize));
+    } else if (heavy) {
+      segs.push(escapeHtml(heavy));
     }
     if (styles.borderRadius && !isNeutralStyle("borderRadius", styles.borderRadius)) {
-      bits.push(`radius ${styles.borderRadius}`);
+      segs.push(escapeHtml(`radius ${styles.borderRadius}`));
     }
-    return bits.join(" · ");
+    return segs;
   }
 
   let snapCacheEl = null;
@@ -1187,25 +1198,51 @@
       position: fixed;
       inset: 0;
       pointer-events: none;
-      color-scheme: dark;
+      color-scheme: light dark;
       font-family: var(--font);
       color: var(--text);
       -webkit-font-smoothing: antialiased;
-      --bg: oklch(0.18 0.012 260);
-      --bg-raised: oklch(0.23 0.012 260);
-      --bg-hover: oklch(0.28 0.012 260);
-      --line: oklch(1 0 0 / 0.09);
-      --text: oklch(0.96 0.008 260);
-      --muted: oklch(0.74 0.014 260);
-      --subtle: oklch(0.6 0.014 260);
-      --accent: oklch(0.8 0.14 75);
-      --accent-text: oklch(0.22 0.04 70);
-      --danger: oklch(0.74 0.13 25);
+      --bg: oklch(0.99 0.004 85);
+      --bg-raised: oklch(0.95 0.008 85);
+      --bg-hover: oklch(0.92 0.01 85);
+      --line: oklch(0 0 0 / 0.1);
+      --ring: oklch(0 0 0 / 0.12);
+      --shade: oklch(0 0 0 / 0.16);
+      --dotring: oklch(0 0 0 / 0.25);
+      --text: oklch(0.22 0.02 70);
+      --muted: oklch(0.48 0.015 70);
+      --subtle: oklch(0.6 0.015 70);
+      --accent: oklch(0.28 0 0);
+      --accent-hover: oklch(0.4 0 0);
+      --accent-ink: oklch(0.34 0 0);
+      --accent-text: oklch(0.97 0 0);
+      --focus: oklch(0.34 0 0 / 0.5);
+      --danger: oklch(0.55 0.13 25);
       --radius: 12px;
       --control: 8px;
       --ease: cubic-bezier(0.23, 1, 0.32, 1);
       --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ui {
+        --bg: oklch(0.18 0.012 260);
+        --bg-raised: oklch(0.23 0.012 260);
+        --bg-hover: oklch(0.28 0.012 260);
+        --line: oklch(1 0 0 / 0.09);
+        --ring: oklch(1 0 0 / 0.08);
+        --shade: oklch(0 0 0 / 0.32);
+        --dotring: oklch(1 0 0 / 0.25);
+        --text: oklch(0.96 0.008 260);
+        --muted: oklch(0.74 0.014 260);
+        --subtle: oklch(0.6 0.014 260);
+        --accent: oklch(0.88 0 0);
+        --accent-hover: oklch(0.95 0 0);
+        --accent-ink: oklch(0.88 0 0);
+        --accent-text: oklch(0.2 0 0);
+        --focus: oklch(0.88 0 0 / 0.6);
+        --danger: oklch(0.74 0.13 25);
+      }
     }
     .veil {
       position: fixed;
@@ -1218,8 +1255,9 @@
     .highlight {
       position: fixed;
       pointer-events: none;
-      border: 1.5px solid var(--accent);
-      background: oklch(0.8 0.14 75 / 0.12);
+      border: 1.5px solid oklch(0.2 0 0);
+      outline: 1px solid oklch(1 0 0 / 0.85);
+      background: oklch(0.5 0 0 / 0.07);
       border-radius: 2px;
       z-index: 3;
     }
@@ -1235,7 +1273,7 @@
       padding: 4px 8px;
       border-radius: 6px;
       background: var(--bg);
-      box-shadow: 0 0 0 1px oklch(1 0 0 / 0.08);
+      box-shadow: 0 0 0 1px var(--ring);
       font-family: var(--mono);
       font-size: 11px;
       line-height: 1.3;
@@ -1249,7 +1287,7 @@
       gap: 8px;
       min-width: 0;
     }
-    .label-main b { font-weight: 500; color: var(--accent); }
+    .label-main b { font-weight: 500; color: var(--accent-ink); }
     .label-main span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
     .label-main i {
       font-style: normal;
@@ -1262,6 +1300,14 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 4px;
+      border-radius: 999px;
+      box-shadow: 0 0 0 1px var(--dotring);
     }
     .dock {
       position: fixed;
@@ -1287,8 +1333,8 @@
       letter-spacing: -0.04em;
       line-height: 1;
       box-shadow:
-        0 0 0 1px oklch(1 0 0 / 0.08),
-        0 10px 30px oklch(0 0 0 / 0.28);
+        0 0 0 1px var(--ring),
+        0 10px 30px var(--shade);
       transition: background-color 140ms ease, transform 140ms var(--ease);
     }
     .fab:hover { background: var(--bg-hover); }
@@ -1297,7 +1343,7 @@
       background: var(--accent);
       color: var(--accent-text);
     }
-    .fab.is-on:hover { background: oklch(0.86 0.13 80); }
+    .fab.is-on:hover { background: var(--accent-hover); }
     .hint {
       position: fixed;
       right: 16px;
@@ -1306,7 +1352,7 @@
       padding: 6px 10px;
       border-radius: 8px;
       background: var(--bg);
-      box-shadow: 0 0 0 1px oklch(1 0 0 / 0.08);
+      box-shadow: 0 0 0 1px var(--ring);
       color: var(--muted);
       font-size: 12px;
       line-height: 1.3;
@@ -1323,8 +1369,8 @@
       border-radius: var(--radius);
       background: var(--bg);
       box-shadow:
-        0 0 0 1px oklch(1 0 0 / 0.08),
-        0 16px 40px oklch(0 0 0 / 0.32);
+        0 0 0 1px var(--ring),
+        0 16px 40px var(--shade);
       pointer-events: auto;
       font-size: 12px;
       line-height: 1.45;
@@ -1341,7 +1387,7 @@
       margin: 0;
     }
     .help dt {
-      color: var(--accent);
+      color: var(--accent-ink);
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
@@ -1357,19 +1403,19 @@
     .composer {
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      padding: 12px 14px;
+      gap: 12px;
+      padding: 14px 16px;
     }
     .popover {
       position: fixed;
       z-index: 9;
-      width: 320px;
+      width: 336px;
       max-width: calc(100vw - 24px);
       border-radius: var(--radius);
       background: var(--bg);
       box-shadow:
-        0 0 0 1px oklch(1 0 0 / 0.08),
-        0 16px 40px oklch(0 0 0 / 0.32);
+        0 0 0 1px var(--ring),
+        0 16px 40px var(--shade);
       pointer-events: auto;
       overflow: hidden;
     }
@@ -1385,7 +1431,7 @@
     .chip code {
       font-family: var(--mono);
       font-size: 11px;
-      color: var(--accent);
+      color: var(--accent-ink);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1395,14 +1441,17 @@
       font-size: 12px;
       line-height: 1.4;
       overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
     .detail {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 3px;
+      padding: 8px 10px;
+      border-radius: var(--control);
+      background: var(--bg-raised);
+      box-shadow: inset 0 0 0 1px var(--line);
       font-family: var(--mono);
       font-size: 10px;
       line-height: 1.4;
@@ -1423,14 +1472,14 @@
       flex: 1;
       min-width: 0;
       text-align: left;
-      color: var(--muted);
+      color: var(--subtle);
       font-size: 12px;
       line-height: 1.4;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .starter button[data-act="starter"]:hover { color: var(--accent); }
+    .starter button[data-act="starter"]:hover { color: var(--accent-ink); }
     .starter .dismiss {
       flex: none;
       color: var(--subtle);
@@ -1459,7 +1508,7 @@
       line-height: 1.45;
       outline: none;
     }
-    textarea:focus { box-shadow: inset 0 0 0 1px oklch(0.8 0.14 75 / 0.7); }
+    textarea:focus { box-shadow: inset 0 0 0 1px var(--focus); }
     textarea::placeholder { color: var(--subtle); }
     .row {
       display: flex;
@@ -1484,7 +1533,7 @@
       color: var(--accent-text);
       font-weight: 500;
     }
-    .btn-primary:hover { background: oklch(0.86 0.13 80); color: var(--accent-text); }
+    .btn-primary:hover { background: var(--accent-hover); color: var(--accent-text); }
     .btn-primary:disabled {
       opacity: 0.45;
       cursor: default;
@@ -1498,7 +1547,7 @@
       padding: 7px 12px;
       border-radius: 8px;
       background: var(--bg);
-      box-shadow: 0 0 0 1px oklch(1 0 0 / 0.08);
+      box-shadow: 0 0 0 1px var(--ring);
       font-size: 12px;
       color: var(--text);
       pointer-events: none;
@@ -1663,14 +1712,13 @@
     const size = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
     const text = visibleText(el);
     const snap = elementSnapshot(el);
-    const subBits = [];
-    if (snap.classes.length) subBits.push(truncate(snap.classes.join(" "), 96));
-    const styleBits = keyStyleBits(snap.styles);
-    if (styleBits) subBits.push(styleBits);
-    const sub = subBits.join(" · ");
+    const shown = new Set(el.id ? [] : meaningfulClasses(el));
+    const extra = snap.classes.filter((name) => !shown.has(name));
+    const subBits = [...styleSegmentsHtml(snap.styles)];
+    if (extra.length) subBits.push(escapeHtml(`+${truncate(extra.join(" "), 64)}`));
     els.label.innerHTML = `<div class="label-main"><b>${escapeHtml(name)}</b>${
       text ? `<span>${escapeHtml(truncate(text, 42))}</span>` : ""
-    }<i>${size}</i></div>${sub ? `<div class="label-sub">${escapeHtml(sub)}</div>` : ""}`;
+    }<i>${size}</i></div>${subBits.length ? `<div class="label-sub">${subBits.join(" · ")}</div>` : ""}`;
     els.label.hidden = false;
     const labelHeight = els.label.offsetHeight || 28;
     const labelTop = rect.top >= labelHeight + 4 ? rect.top - labelHeight - 4 : rect.bottom + 6;
@@ -1694,20 +1742,17 @@
       return;
     }
     const target = state.draft.target;
-    const rows = [];
+    const parts = [];
     if (target.fullClasses && target.fullClasses.length) {
-      rows.push(`classes: ${truncate(target.fullClasses.join(" "), 140)}`);
+      parts.push(`<div>${escapeHtml(`classes: ${truncate(target.fullClasses.join(" "), 140)}`)}</div>`);
     }
-    const styleBits = keyStyleBits(target.styles || {});
-    if (styleBits) rows.push(`style: ${styleBits}`);
+    const styleSegs = styleSegmentsHtml(target.styles || {});
+    if (styleSegs.length) parts.push(`<div>style: ${styleSegs.join(" · ")}</div>`);
     if (target.crumbs && target.crumbs.length) {
-      rows.push(`in: ${target.crumbs.join(" › ")}`);
+      parts.push(`<div>${escapeHtml(`in: ${target.crumbs.join(" › ")}`)}</div>`);
     }
-    if (target.rect) {
-      rows.push(`box: ${target.rect.width}×${target.rect.height}`);
-    }
-    els.chipDetail.hidden = !rows.length;
-    els.chipDetail.innerHTML = rows.map((row) => `<div>${escapeHtml(row)}</div>`).join("");
+    els.chipDetail.hidden = !parts.length;
+    els.chipDetail.innerHTML = parts.join("");
   }
 
   function paintComposerDynamic() {
@@ -1732,9 +1777,8 @@
     }
     els.popover.hidden = false;
     els.chipName.textContent = state.draft.target.name;
-    els.chipText.textContent = state.draft.target.text
-      ? `“${state.draft.target.text}”`
-      : state.draft.target.trail;
+    els.chipText.hidden = !state.draft.target.text;
+    els.chipText.textContent = state.draft.target.text ? `“${state.draft.target.text}”` : "";
     paintDetail();
     paintComposerDynamic();
     if (window.innerWidth <= 520) {
